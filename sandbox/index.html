@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101d1c">
+  <title>African Salford | Squad sandbox</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div><span class="eyebrow">AFRICAN SALFORD FC26</span><h1>Squad sandbox<span class="brand-dot">.</span></h1></div>
+    <div class="header-tools"><span class="edition">FC26 SANDBOX</span></div>
+  </header>
+  <main>
+    <div class="intro"><div><h2>The tactics board</h2><p id="season-label">Waiting for your club squad...</p></div><span id="save-state">Saved on this device</span></div>
+    <div id="error" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="board panel" aria-labelledby="board-heading">
+        <div class="panel-heading"><div><span class="eyebrow">FORMATION</span><h3 id="board-heading">4-2-3-1 <span>Wide</span></h3></div><label class="lineup-choice"><span class="sr-only">Select XI</span><select id="lineup-select"><option value="0">1st XI</option><option value="1">2nd XI</option><option value="2">3rd XI</option></select></label><button id="clear" class="subtle" type="button">Clear XI</button></div>
+        <div class="stats"><div><strong id="xi-count">0 / 11</strong><span>STARTING XI</span></div><div><strong id="average">--</strong><span>AVERAGE OVR</span></div><div><strong id="average-age">--</strong><span>AVERAGE AGE</span></div></div>
+        <div class="pitch" id="pitch" aria-label="4-2-3-1 wide formation">
+          <div class="pitch-lines" aria-hidden="true"><div class="halfway"></div><div class="centre-circle"></div><div class="centre-spot"></div><div class="penalty top"></div><div class="penalty bottom"></div><div class="six-yard top"></div><div class="six-yard bottom"></div><div class="goal top"></div><div class="goal bottom"></div></div>
+          <div id="slots"></div>
+        </div>
+        <span id="instruction" class="sr-only" role="status" aria-live="polite"></span>
+      </section>
+      <aside class="roster panel" aria-labelledby="roster-heading">
+        <div class="panel-heading"><div><span class="eyebrow">SQUAD &amp; SCOUTING</span><h3 id="roster-heading">Player pool <span id="roster-count">0</span></h3></div><button id="add-player" class="primary" type="button">+ Add player</button></div>
+        <div class="filters"><label class="search-label"><span class="sr-only">Search players by name</span><input id="search" type="search" placeholder="Search name..."></label><label><span class="sr-only">Filter by position</span><select id="position-filter"><option value="">All positions</option></select></label></div>
+        <fieldset class="source-filter" id="source-filter"><legend>Player source</legend><label><input type="checkbox" value="active" checked> Active squad</label><label><input type="checkbox" value="loan" checked> On loan</label><label><input type="checkbox" value="created" checked> Created players</label></fieldset>
+        <div class="pool-legend"><span>PLAYER</span><label class="pool-sort">Sort by<select id="pool-sort"><option value="ovr-desc">OVR: high to low</option><option value="ovr-asc">OVR: low to high</option><option value="pot-desc">Potential: high to low</option><option value="age-asc">Age: young to old</option><option value="age-desc">Age: old to young</option><option value="name-asc">Name: A to Z</option><option value="position-asc">Position</option></select></label></div>
+        <div id="player-list" class="player-list"></div>
+        <div class="roster-footer"><span id="list-count">0 players</span><span>Click or drag to add to the XI</span></div>
+      </aside>
+    </div>
+    <footer class="page-footer"><span>Independent fan tool. Not affiliated with EA SPORTS.</span></footer>
+  </main>
+  <dialog id="player-dialog">
+    <form id="player-form">
+      <div class="dialog-heading"><h2 id="player-dialog-title">Add player</h2><button type="button" data-close="player-dialog" aria-label="Close player editor">X</button></div>
+      <label>Player name<input name="name" required maxlength="100" autocomplete="off"></label>
+      <div class="form-grid"><label>Overall (OVR)<input name="ovr" type="number" min="1" max="99" required></label><label>Potential (POT)<input name="pot" type="number" min="1" max="99"></label><label>Age<input name="age" type="number" min="14" max="60"></label><label>Nation<select name="nation"></select></label></div>
+      <fieldset><legend>Positions</legend><div class="form-grid" id="position-fields"></div></fieldset>
+      <p id="player-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button id="delete-player" class="danger" type="button" hidden>Delete player</button><button type="button" data-close="player-dialog">Cancel</button><button class="primary" type="submit">Save player</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

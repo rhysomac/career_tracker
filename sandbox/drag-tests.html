@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sandbox drag tests</title></head>
+<body>
+<h1>Sandbox drag tests</h1>
+<pre id="results"></pre>
+<script type="module">
+import { enablePlayerDragging } from "./drag.js";
+import { emptyState, makePlayer, placePlayer } from "./model.js";
+
+const results = [];
+function test(name, run) {
+  let root;
+  try {
+    let state = { ...emptyState(), players: ["a", "b"].map(id => makePlayer({ name: id, ovr: 70, positions: ["ST"] }, id)) };
+    root = document.createElement("div");
+    root.style.cssText = "position:fixed;inset:0;background:white;z-index:10";
+    root.innerHTML = '<div class="player-row" data-player="a"><button data-drag-handle="a">Drag</button><button data-pick="a">Player</button></div><div class="pitch"><div data-slot="ST" style="position:absolute;left:200px;top:20px;width:80px;height:80px"></div><div data-slot="GK" style="position:absolute;left:300px;top:20px;width:80px;height:80px"></div></div>';
+    document.body.append(root);
+    const drops = [];
+    enablePlayerDragging(root, (id, slot) => {
+      state = placePlayer(state, id, slot);
+      drops.push({ id, slot });
+    });
+    const pointer = (target, type, x, y, pointerType = "mouse") => target.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, isPrimary: true, pointerId: 1, pointerType,
+      button: 0, buttons: type === "pointerup" ? 0 : 1, clientX: x, clientY: y,
+    }));
+    run({ root, pointer, drops, state: () => state });
+    results.push(`PASS ${name}`);
+  } catch (error) {
+    results.push(`FAIL ${name}: ${error.message}`);
+  } finally {
+    root?.remove();
+    document.querySelector(".drag-preview")?.remove();
+  }
+}
+const assert = (value, message) => { if (!value) throw new Error(message); };
+test("Mouse dragging from nested pool button places player on board", ({ root, pointer, drops, state }) => {
+  pointer(root.querySelector("[data-pick]"), "pointerdown", 20, 20);
+  pointer(root, "pointermove", 240, 60);
+  pointer(root, "pointerup", 240, 60);
+  assert(drops.length === 1 && state().lineup.ST === "a", "Player not assigned");
+});
+test("Touch handle dragging places player while normal pool touch can scroll", ({ root, pointer, drops }) => {
+  pointer(root.querySelector("[data-pick]"), "pointerdown", 20, 20, "touch");
+  pointer(root, "pointermove", 240, 60, "touch");
+  pointer(root, "pointerup", 240, 60, "touch");
+  assert(drops.length === 0, "Normal touch unexpectedly dragged");
+  pointer(root.querySelector("[data-drag-handle]"), "pointerdown", 20, 20, "touch");
+  pointer(root, "pointermove", 240, 60, "touch");
+  pointer(root, "pointerup", 240, 60, "touch");
+  assert(drops.length === 1, "Handle did not drag");
+});
+test("Board player moves to empty position and swaps with occupied position", ({ root, pointer, state }) => {
+  const pool = root.querySelector("[data-pick]");
+  pointer(pool, "pointerdown", 20, 20);
+  pointer(root, "pointermove", 240, 60);
+  pointer(root, "pointerup", 240, 60);
+  const firstSlot = root.querySelector("[data-slot=ST]");
+  firstSlot.dataset.player = "a";
+  pointer(firstSlot, "pointerdown", 240, 60);
+  pointer(root, "pointermove", 340, 60);
+  pointer(root, "pointerup", 340, 60);
+  assert(state().lineup.GK === "a" && !state().lineup.ST, "Empty slot move failed");
+  const secondSlot = root.querySelector("[data-slot=GK]");
+  secondSlot.dataset.player = "a";
+  pool.parentElement.dataset.player = "b";
+  pointer(pool, "pointerdown", 20, 20);
+  pointer(root, "pointermove", 240, 60);
+  pointer(root, "pointerup", 240, 60);
+  pointer(secondSlot, "pointerdown", 340, 60, "touch");
+  pointer(root, "pointermove", 240, 60, "touch");
+  pointer(root, "pointerup", 240, 60, "touch");
+  assert(state().lineup.ST === "a" && state().lineup.GK === "b", "Swap failed");
+});
+test("A tap does not drag or suppress selection clicks", ({ root, pointer, drops }) => {
+  const pick = root.querySelector("[data-pick]");
+  let clicks = 0;
+  pick.addEventListener("click", () => clicks++);
+  pointer(pick, "pointerdown", 20, 20);
+  pointer(root, "pointerup", 20, 20);
+  pick.click();
+  assert(!drops.length && clicks === 1, "Tap selection changed");
+});
+test("Drag release suppresses accidental click and cancellation leaves state unchanged", ({ root, pointer, drops }) => {
+  const pick = root.querySelector("[data-pick]");
+  let clicks = 0;
+  root.addEventListener("click", () => clicks++);
+  pointer(pick, "pointerdown", 20, 20);
+  pointer(root, "pointermove", 240, 60);
+  pointer(root, "pointerup", 240, 60);
+  pick.click();
+  assert(clicks === 0, "Drag triggered selection click");
+  pointer(pick, "pointerdown", 20, 20);
+  pointer(root, "pointermove", 340, 60);
+  pointer(root, "pointercancel", 340, 60);
+  pointer(root, "pointerup", 340, 60);
+  assert(drops.length === 1 && !document.querySelector(".drag-preview"), "Cancelled drag changed assignment");
+});
+document.querySelector("#results").textContent = results.join("\n");
+document.title = results.some(result => result.startsWith("FAIL")) ? "FAIL" : "PASS";
+</script>
+</body>
+</html>

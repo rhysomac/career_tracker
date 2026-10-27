@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Touchline tests</title><link rel="stylesheet" href="styles.css"></head>
+<body><main><h1>Touchline model tests</h1><p id="summary">Running...</p><ol id="results"></ol><a href="../index.html#sandbox">Back to sandbox</a></main>
+<script type="module">
+import { FORMATION, emptyState, makePlayer, placePlayer, removePlayerFromLineup, selectLineup, validateState, parseDelimited, playersFromRows, playersFromGoogle } from "./model.js";
+import { validateTargets, validateLineup, validateLineups, validateClubPlayers, reconcileLineup, restoreIntegratedBackup } from "./integration.js";
+let passed = 0, failed = 0;
+const assert = (condition, message = "Assertion failed") => { if (!condition) throw new Error(message); };
+const throws = callback => { let caught = false; try { callback(); } catch { caught = true; } assert(caught, "Expected an error"); };
+function test(name, run) {
+  const item = document.createElement("li");
+  try { run(); passed++; item.textContent = `PASS: ${name}`; }
+  catch (error) { failed++; item.textContent = `FAIL: ${name}: ${error.message}`; }
+  document.querySelector("#results").append(item);
+}
+const player = (id, positions = ["ST"]) => makePlayer({ name: id, ovr: 70, pot: "", age: "", nation: "", positions }, id);
+test("4-2-3-1 wide has eleven unique slots and correct roles", () => {
+  assert(FORMATION.length === 11 && new Set(FORMATION.map(s => s.id)).size === 11);
+  assert(FORMATION.map(s => s.position).join() === "ST,LM,CAM,RM,CDM,CDM,LB,CB,CB,RB,GK");
+});
+test("Optional fields are nullable and positions normalized", () => {
+  const p = makePlayer({ name: " Test ", ovr: "99", pot: "-", age: "", positions: ["st", "-", "ST"] });
+  assert(p.name === "Test" && p.ovr === 99 && p.pot === null && p.age === null && p.positions.join() === "ST");
+});
+test("OVR enforces exact integer boundaries 1-99", () => {
+  for (const ovr of [1, 99]) assert(makePlayer({ name: "P", ovr, positions: ["GK"] }).ovr === ovr);
+  for (const ovr of ["", "-", 0, 100, 70.5, "no", Infinity]) throws(() => makePlayer({ name: "P", ovr, positions: ["GK"] }));
+});
+test("Name, positions, POT and age validated", () => {
+  for (const patch of [{ name: "" }, { positions: [] }, { positions: ["FAKE"] }, { pot: 100 }, { age: 13 }, { age: 61 }, { age: 20.5 }]) throws(() => makePlayer({ ...player("a"), ...patch }));
+});
+test("Moving player to empty slot clears old slot without mutating input", () => {
+  const s = { ...emptyState(), players: [player("a")], lineup: { ST: "a" } };
+  const moved = placePlayer(s, "a", "GK");
+  assert(moved.lineup.GK === "a" && !moved.lineup.ST && s.lineup.ST === "a");
+});
+test("Pitch-to-pitch replacement swaps players", () => {
+  const s = { ...emptyState(), players: [player("a"), player("b")], lineup: { ST: "a", LM: "b" } };
+  const moved = placePlayer(s, "a", "LM");
+  assert(moved.lineup.LM === "a" && moved.lineup.ST === "b");
+});
+test("Pool replacement unassigns displaced player, with no duplicate XI entry", () => {
+  const s = { ...emptyState(), players: [player("a"), player("b")], lineup: { ST: "a" } };
+  const moved = placePlayer(s, "b", "ST");
+  assert(Object.values(moved.lineup).join() === "b" && moved.players.length === 2);
+  assert(placePlayer(moved, "b", "ST") === moved);
+});
+test("A player assigned to one XI cannot be assigned to another", () => {
+  const first = placePlayer({ ...emptyState(), players: [player("a")] }, "a", "ST");
+  const second = selectLineup(first, 1);
+  throws(() => placePlayer(second, "a", "GK"));
+  assert(selectLineup(first, 0).lineup.ST === "a" && selectLineup(first, 2).lineup.ST === undefined);
+});
+test("Removing a player from the selected XI returns them to its pool", () => {
+  const assigned = placePlayer({ ...emptyState(), players: [player("a")] }, "a", "ST");
+  const returned = removePlayerFromLineup(assigned, "a");
+  assert(Object.keys(returned.lineup).length === 0 && returned.players.length === 1);
+});
+test("Rejects unknown player and slot", () => {
+  const s = { ...emptyState(), players: [player("a")] };
+  throws(() => placePlayer(s, "fake", "ST")); throws(() => placePlayer(s, "a", "fake"));
+});
+test("Paste accepts headers, blank lines, optional blanks and extra tactical columns", () => {
+  const rows = parseDelimited("Name\tOVR\tPOT\tAge\tNation\tPos1\tPos2\tPos3\tPos4\n\nA\t70\t-\t20\tMorocco\tGK\t-\t-\t-\tIgnore");
+  const ps = playersFromRows(rows);
+  assert(ps.length === 1 && ps[0].name === "A" && ps[0].pot === null && ps[0].positions.join() === "GK");
+});
+test("CSV handles quoted commas, escaped quotes and CRLF", () => {
+  const ps = playersFromRows(parseDelimited('"Last, ""First""",71,80,22,Nation,CM,CDM,-,-\r\nOther,66,,,Nation,ST'));
+  assert(ps.length === 2 && ps[0].name === 'Last, "First"' && ps[1].age === null);
+});
+test("Quoted TSV and multiline names parse", () => {
+  assert(parseDelimited('"A\tB"\t70\t\t\t\tST')[0][0] === "A\tB");
+  assert(parseDelimited('"A\nB",70,,,,ST')[0][0] === "A\nB");
+});
+test("Malformed imports fail rather than dropping invalid rows", () => {
+  throws(() => parseDelimited('"Unclosed,70'));
+  throws(() => parseDelimited('"Name"trailing,70'));
+  throws(() => playersFromRows(parseDelimited("A,70,,,,ST\nB,100,,,,GK")));
+  throws(() => playersFromRows([[""]]));
+});
+test("Google parser uses headers and ignores tactical columns", () => {
+  const response = { status: "ok", table: { cols: ["OVR", "Name", "POT", "Age", "Nation", "Pos1", "Pos2", "Pos3", "Pos4", ""].map(label => ({ label })), rows: [{ c: [70, "A", null, 20, "X", "GK", "-", "-", "-", "Tactics"].map(v => ({ v })) }] } };
+  const ps = playersFromGoogle(`google.visualization.Query.setResponse(${JSON.stringify(response)});`);
+  assert(ps.length === 1 && ps[0].name === "A" && ps[0].ovr === 70);
+  throws(() => playersFromGoogle("no response"));
+  throws(() => playersFromGoogle('{"status":"error"}'));
+});
+test("Backup round trip retains squad and XI", () => {
+  const s = { ...emptyState(), players: [player("a")], lineup: { ST: "a" } };
+  const restored = validateState(JSON.parse(JSON.stringify(s)));
+  assert(restored.lineup.ST === "a" && restored.players[0].id === "a" && restored.lineups.length === 3);
+});
+test("Backup migration removes cross-XI duplicates from later XIs", () => {
+  const restored = validateState({ version: 1, players: [player("a")], activeLineup: 0,
+    lineups: [{ ST: "a" }, { GK: "a" }, {}], lineup: { ST: "a" } });
+  assert(restored.lineups[0].ST === "a" && Object.keys(restored.lineups[1]).length === 0);
+});
+test("Backups reject duplicate IDs, duplicate XI, missing players and wrong versions", () => {
+  const s = { ...emptyState(), players: [player("a")], lineup: { ST: "a" } };
+  throws(() => validateState({ ...s, players: [player("a"), player("a")] }));
+  throws(() => validateState({ ...s, lineup: { ST: "a", GK: "a" } }));
+  throws(() => validateState({ ...s, lineup: { ST: "missing" } }));
+  throws(() => validateState({ ...s, lineup: { FAKE: "a" } }));
+  throws(() => validateState({ ...s, version: 2 }));
+});
+const club = [{ ...player("club:1", ["GK"]), clubStatus: "On loan" }];
+test("Integration validates and retains club status", () => {
+  assert(validateClubPlayers(club)[0].clubStatus === "On loan");
+  throws(() => validateClubPlayers([{ ...player("club:1"), clubStatus: "Youth academy" }]));
+  throws(() => validateClubPlayers([club[0], club[0]]));
+});
+test("Targets cannot impersonate club players", () => {
+  assert(validateTargets([player("target")]).length === 1);
+  throws(() => validateTargets(club));
+});
+test("Saved XI validates slots and forbids duplicate assignments", () => {
+  assert(validateLineup({ GK: "club:1" }).GK === "club:1");
+  throws(() => validateLineup({ ST: "a", GK: "a" }));
+  throws(() => validateLineup({ FAKE: "a" }));
+  throws(() => validateLineup([]));
+});
+test("Saved XIs keep the first assignment and return cross-XI duplicates to the pool", () => {
+  const lineups = [{ ST: "a" }, { GK: "a" }, {}];
+  const validated = validateLineups(lineups);
+  assert(validated.length === 3 && validated[0].ST === "a" && !Object.keys(validated[1]).length);
+  throws(() => validateLineups([{}, {}]));
+  throws(() => validateLineups([{ ST: "a", GK: "a" }, {}, {}]));
+});
+test("Latest squad refresh preserves available identities and removes unavailable ones", () => {
+  const updated = [{ ...club[0], ovr: 75 }, player("target")];
+  const lineup = reconcileLineup({ GK: "club:1", ST: "target", LM: "club:departed" }, updated);
+  assert(lineup.GK === "club:1" && lineup.ST === "target" && !lineup.LM);
+});
+test("Backup restore never overrides current club ratings or resurrects departed players", () => {
+  const backup = { version: 1, players: [{ ...club[0], ovr: 50 }, player("target"), player("club:departed")],
+    lineup: { GK: "club:1", ST: "target", LM: "club:departed" } };
+  const restored = restoreIntegratedBackup(backup, club);
+  assert(restored.players.length === 2 && restored.players[0].ovr === 70 && restored.players[0].clubStatus === "On loan");
+  assert(restored.lineup.GK === "club:1" && restored.lineup.ST === "target" && !restored.lineup.LM);
+});
+test("Standalone backups migrate players as transfer targets without replacing live squad", () => {
+  const restored = restoreIntegratedBackup({ version: 1, players: [player("original-id")], lineup: { ST: "original-id" } }, club);
+  assert(restored.players.length === 2 && restored.lineup.ST === "original-id");
+});
+document.querySelector("#summary").textContent = `${passed} passed, ${failed} failed`;
+document.body.dataset.testFailures = String(failed);
+</script></body>
+</html>

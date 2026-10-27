@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Career tracker data tests</title></head>
+<body>
+<h1>Data tests</h1>
+<pre id="results">Running…</pre>
+<script type="module">
+import { parseResponse, normalizeTable, sortRows, sortSquadRows, cell, playerId, FORMATION, POSITION_ORDER, TIMELINES, seasonLineups, seasonTitles, titleSeasons, formatSeason, createSeasonStatTimeline, academyPlayer } from "./data.js";
+import { competitionGroup, createCellFormatter } from "./formatting.js";
+import { clubPlayersForSandbox } from "./sandbox-roster.js";
+import { spreadsheetDate, buildMovementHistories, applyActiveYears } from "./movements.js";
+const results = [];
+function test(name, check) {
+  try { if (!check()) throw new Error("Assertion failed"); results.push(`PASS ${name}`); }
+  catch (error) { results.push(`FAIL ${name}: ${error.message}`); }
+}
+test("Season display expands all years without changing source keys or dates", () =>
+  formatSeason("25/26") === "2025-26" && formatSeason("39/40") === "2039-40" &&
+  formatSeason("Start") === "Start" && formatSeason("16/04/2002") === "16/04/2002" &&
+  formatSeason("2025-26") === "2025-26");
+const rows = [2100000, null, 900, 0, "-", 10000].map(value => ({ A: { value, text: String(value) } }));
+test("Numeric ascending sort; zero preserved; missing last", () => JSON.stringify(sortRows(rows, "A").map(row => row.A.value)) === '[0,900,10000,2100000,null,"-"]');
+test("Numeric descending sort; missing last", () => JSON.stringify(sortRows(rows, "A", "desc").map(row => row.A.value)) === '[2100000,10000,900,0,null,"-"]');
+const birthDates = [{ DOB: { value: "16/04/2002" } }, { DOB: { value: "04/09/2002" } }, { DOB: { value: "20/04/2003" } }];
+test("DOB sorts by calendar date rather than day-first text", () => sortRows(birthDates, "DOB", "asc", "DOB").map(row => row.DOB.value).join(",") === "16/04/2002,04/09/2002,20/04/2003");
+test("Sorting does not mutate source", () => rows[0].A.value === 2100000);
+const source = { cols: [{ id: "A", label: "Cl #", type: "number" }, { id: "B", label: "Val", type: "number" }, { id: "C", label: "" }], rows: [{ c: [{ v: 34 }, { v: 2100000, f: "€2,100,000" }, { v: "side note" }] }, { c: [null, null, { v: "ignored note" }] }] };
+const table = normalizeTable(source, "26/27");
+test("Keep numeric values and formatted display separately", () => table.rows[0].B.value === 2100000 && table.rows[0].B.text === "€2,100,000");
+test("Remove unnamed side notes and empty rows", () => table.columns.length === 2 && table.rows.length === 1);
+test("Stable club ID joins", () => playerId(table.rows[0], table) === "34");
+test("Missing profile fields remain missing", () => cell(table.rows[0], table, "Unknown").value === null);
+test("Unnamed first column preserved as season for team stats", () => normalizeTable({ cols: [{ id: "A", label: "", type: "string" }], rows: [{ c: [{ v: "25/26" }] }] }, "Team_Stats").columns[0].label === "Season");
+test("Google callback parsed without evaluating JavaScript", () => parseResponse('/*O_o*/google.visualization.Query.setResponse({"status":"ok","table":{"cols":[],"rows":[]}});').rows.length === 0);
+test("Google errors are explicit", () => { try { parseResponse('{"status":"error","errors":[{"message":"Denied"}]}'); return false; } catch (error) { return error.message === "Denied"; } });
+function fixture(sheet, labels, rows) {
+  return normalizeTable({
+    cols: labels.map((label, index) => ({ id: String(index), label, type: "number" })),
+    rows: rows.map(row => ({ c: row.map(value => ({ v: value })) })),
+  }, sheet);
+}
+test("Movement dates accept Google dates and day-first text but reject impossible dates", () =>
+  spreadsheetDate("Date(2025,0,1)") === spreadsheetDate("01/01/2025") &&
+  spreadsheetDate("2025-01-01") === spreadsheetDate("01/01/2025") &&
+  spreadsheetDate("31/02/2025") === null && spreadsheetDate("not a date") === null);
+const movementColumns = ["Cl #", "Name", "Join Date", "Join Age", "Join Fee", "Join From", "Join Type", "Dep Date", "Dep Age", "Dep Fee", "Dep To", "Dep Type"];
+const movementWorkbook = {
+  Settings: fixture("Settings", ["Current date"], [["Date(2026,10,28)"]]),
+  Players: fixture("Players", ["Cl #", "Preferred Name", "DOB", "Yrs Active"], [
+    [1, "Summer loan", "01/01/2000", 999],
+    [2, "Winter loan", "10/08/2000", 999],
+    [3, "Full year loan", "01/01/2000", 999],
+    [4, "Permanent departure", null, 999],
+    [5, "No history", null, 999],
+    [6, "Released during loan", null, 999],
+    [7, "Returned early", null, 999],
+    [8, "Missing duration", null, 999],
+    [9, "Future departure", null, 999],
+  ]),
+  Start: fixture("Start", movementColumns, [1, 2, 3, 4, 6, 7, 8, 9].map(id =>
+    [id, null, "01/01/2025", 24, 0, "Original Club", "Transfer"])),
+  "25/26": fixture("25/26", movementColumns, [
+    [1, "Summer loan", "01/01/2025", 25, 0, "Original Club", "Transfer", "10/08/2025", 25, 0, "Loan Club", "Loan 6m"],
+    [2, "Winter loan", null, null, null, null, null, "15/01/2026", 25, 0, "Loan Club", "Loan 6m"],
+    [3, "Full year loan", null, null, null, null, null, "10/08/2025", 25, 0, "Loan Club", "Loan 1yr"],
+    [4, "Permanent departure", null, null, null, null, null, "01/02/2026", 25, "€900,000", "New Club", "Transfer"],
+    [6, "Released during loan", null, null, null, null, null, "01/08/2025", 25, 0, "Loan Club", "Loan 1yr"],
+    [7, "Returned early", null, null, null, null, null, "01/08/2025", 25, 0, "Loan Club", "Loan 1yr"],
+    [8, "Missing duration", null, null, null, null, null, "01/08/2025", 25, 0, "Loan Club", "Loan"],
+  ]),
+  "26/27": fixture("26/27", movementColumns, [
+    [1, "Summer loan", null, null, null, null, null, "01/08/2026", 26, 0, "Second Loan Club", "Loan 1yr"],
+    [6, "Released during loan", null, null, null, null, null, "01/01/2026", 25, 0, null, "Released"],
+    [7, "Returned early", "01/04/2026", 25, null, "Loan Club", "Loan return"],
+    [9, "Future departure", null, null, null, null, null, "01/01/2027", 25, 0, "New Club", "Transfer"],
+  ]),
+};
+const movementHistories = buildMovementHistories(movementWorkbook, ["25/26", "26/27"]);
+const movementDate = text => spreadsheetDate(text);
+const yearsBetween = (start, end) => (movementDate(end) - movementDate(start)) / (365.25 * 86400000);
+test("Summer six-month loans return on January 1; current loans do not return prematurely", () =>
+  movementHistories.get("1").events.filter(event => event.kind === "Returned from loan").map(event => event.dateText).join() === "01/01/2026");
+test("Winter six-month loans and year-long loans return on July 1", () =>
+  ["2", "3"].every(id => movementHistories.get(id).events.some(event => event.kind === "Returned from loan" && event.dateText === "01/07/2026")));
+test("Multiple spells exclude completed and ongoing loan time exactly", () =>
+  Math.abs(movementHistories.get("1").totalYears -
+    (yearsBetween("01/01/2025", "10/08/2025") + yearsBetween("01/01/2026", "01/08/2026"))) < 1e-10);
+test("Duplicate joins across tabs are merged and zero fees survive", () =>
+  movementHistories.get("1").events.filter(event => event.kind === "Joined").length === 1 &&
+  movementHistories.get("1").events[0].fee === "0");
+test("Permanent departures stop active years and keep their transfer details", () =>
+  movementHistories.get("4").totalYears === yearsBetween("01/01/2025", "01/02/2026") &&
+  movementHistories.get("4").events.at(-1).fee === "€900,000");
+test("Releases during loans do not generate a later return", () =>
+  !movementHistories.get("6").events.some(event => event.kind === "Returned from loan") &&
+  movementHistories.get("6").totalYears === yearsBetween("01/01/2025", "01/08/2025"));
+test("Recorded early returns override scheduled returns", () =>
+  !movementHistories.get("7").events.some(event => event.kind === "Returned from loan") &&
+  movementHistories.get("7").totalYears === yearsBetween("01/01/2025", "01/08/2025") + yearsBetween("01/04/2026", "28/11/2026"));
+test("Missing dates and unknown loan durations produce explicit unavailable totals", () =>
+  ["5", "8"].every(id => movementHistories.get(id).totalYears === null && movementHistories.get(id).issues.length > 0));
+test("Future departures do not shorten current active spells", () =>
+  movementHistories.get("9").totalYears === yearsBetween("01/01/2025", "28/11/2026"));
+test("Loan return ages use the birthday, not rounded seasonal ages", () =>
+  movementHistories.get("2").events.find(event => event.kind === "Returned from loan").age === "25");
+applyActiveYears(movementWorkbook, movementHistories);
+test("Players totals use exact raw durations for sorting and one decimal for display", () =>
+  cell(movementWorkbook.Players.rows[0], movementWorkbook.Players, "Yrs Active").value === movementHistories.get("1").totalYears &&
+  cell(movementWorkbook.Players.rows[0], movementWorkbook.Players, "Yrs Active").text === movementHistories.get("1").totalYears.toFixed(1) &&
+  cell(movementWorkbook.Players.rows[4], movementWorkbook.Players, "Yrs Active").value === null);
+test("Invalid current game date fails explicitly", () => {
+  try { buildMovementHistories({ ...movementWorkbook, Settings: fixture("Settings", ["Current date"], [["invalid"]]) }, []); return false; }
+  catch (error) { return error.message.includes("current in-game date"); }
+});
+const squad = fixture("26/27", ["Ovr", "MR", "AP", "Gr", "Cnt YR", "Inj Wks"], [[50, 4, 0, -1, 0, 2], [70, 7, 10, 1, 2, 0], [95, 10, 20, 0, 2, 0]]);
+const squadFormat = createCellFormatter(squad);
+test("Overall rating follows exact 50 / 70 / 95 colours", () => [50, 70, 95].map(value => squadFormat(squad.columns[0], value).backgroundColor).join("|") === "rgb(230, 124, 115)|rgb(255, 255, 255)|rgb(87, 187, 138)");
+test("Match rating follows 4 / 7 / 10 colours", () => [4, 7, 10].map(value => squadFormat(squad.columns[1], value).backgroundColor).join("|") === "rgb(230, 124, 115)|rgb(255, 255, 255)|rgb(87, 187, 138)");
+test("Statistical scales use column min/max", () => squadFormat(squad.columns[2], 0).backgroundColor === "rgb(255, 255, 255)" && squadFormat(squad.columns[2], 20).backgroundColor === "rgb(87, 187, 138)");
+test("Missing or text values never receive numeric formatting", () => Object.keys(squadFormat(squad.columns[0], null)).length === 0 && Object.keys(squadFormat(squad.columns[0], "-")).length === 0);
+test("Growth, contract expiry and injuries use signed font colours", () => squadFormat(squad.columns[3], -1).color === "#ff0000" && squadFormat(squad.columns[3], 1).color === "#00a931" && squadFormat(squad.columns[4], 0).color === "#ff0000" && squadFormat(squad.columns[5], 2).color === "#ff0000");
+const honours = fixture("Player_Titles", ["Cl #", "TotS", "Titles", "League Two"], [[null, null, 10, 1], [1, 0, 0, 0], [2, 1, 2, 1]]);
+const honourFormat = createCellFormatter(honours);
+test("Honours total scale excludes club aggregate", () => honourFormat(honours.columns[2], 2).backgroundColor === "rgb(87, 187, 138)");
+test("Honours TotS counts use green scale", () => honourFormat(honours.columns[1], 1).backgroundColor === "rgb(87, 187, 138)");
+test("Won competitions use green text; competition groups remain coloured", () => honourFormat(honours.columns[3], 1).color === "#34a853" && honourFormat(honours.columns[3], 0).backgroundColor === "#ddf2f0" && honourFormat(honours.columns[3], 0).color === undefined);
+const timeline = fixture("AP_Timeline", ["Name", "25/26", "26/27", "Total"], [["One", 10, 20, 30], ["Two", 0, 10, 10]]);
+const timelineFormat = createCellFormatter(timeline);
+test("Timeline seasons share one scale and total uses separate scale", () => timelineFormat(timeline.columns[2], 20).backgroundColor === "rgb(87, 187, 138)" && timelineFormat(timeline.columns[3], 30).backgroundColor === "rgb(87, 187, 138)");
+const tots = fixture("TotS", ["", "GK", "ST"], [["25/26", "Oumar Pona", "Daniel Udoh"], ["26/27", null, null], [null, "diagram label", null], ["25/26", "duplicate diagram", null]]);
+for (const column of tots.columns) column.type = "string";
+const lineups = seasonLineups(tots);
+test("TOTS reads each season once and excludes diagram rows", () => lineups.length === 2 && lineups[0].players.find(player => player.position === "GK").name === "Oumar Pona");
+test("Future TOTS seasons do not reuse earlier selections", () => lineups[1].players.every(player => player.name === null));
+test("4-2-3-1 wide has all eleven positions with left/right orientation", () => FORMATION.length === 11 && new Set(FORMATION.map(([position]) => position)).size === 11 && FORMATION.find(([position]) => position === "LM")[1] < FORMATION.find(([position]) => position === "RM")[1] && FORMATION.find(([position]) => position === "LB")[1] < FORMATION.find(([position]) => position === "RB")[1]);
+const positions = fixture("26/27", ["Pos1"], [["CB"], ["LW"], ["GK"], ["ST"], ["RB"], ["CAM"], ["LB"], ["CDM"], ["RM"], ["CM"], ["LM"], ["RW"]]);
+test("Position sorting uses preferred football order rather than alphabetical", () => sortRows(positions.rows, positions.columns[0].key, "asc", "Pos1").map(row => row[positions.columns[0].key].value).join(",") === POSITION_ORDER.join(","));
+const sortedSquad = fixture("26/27", ["Cl #", "Yt #", "Name", "Status", "Pos1", "Ovr", "Pot", "DOB"], [
+  [1, null, "Departed", "Departed", "GK", 80, 90, "01/01/2000"],
+  [2, 1, "Active graduate", "Active", "ST", 70, 80, "01/01/2000"],
+  [3, 2, "Loan graduate", "On loan", "GK", 80, 90, "01/01/2000"],
+  [4, null, "Active GK", "Active", "GK", 60, 70, "01/01/2000"],
+  [null, 3, "Academy", "Active", "GK", 90, 95, "01/01/2008"],
+  [5, 4, "Taha Ibrahim", "Active", "ST", 71, 80, "01/01/2000"],
+  [6, null, "Loan", "On loan", "ST", 60, 70, "01/01/2000"],
+  [7, 5, "Older active ST", "Active", "ST", 71, 81, "01/01/1999"],
+  [8, null, "Younger active ST", "Active", "ST", 71, 81, "01/01/2001"],
+]);
+test("Squad sorts graduates by actual status, then position, OVR, potential and DOB", () => sortSquadRows(
+  sortedSquad.rows, sortedSquad, row => cell(row, sortedSquad, "Status").value
+).map(row => cell(row, sortedSquad, "Name").value).join(",") === "Active GK,Older active ST,Younger active ST,Taha Ibrahim,Active graduate,Loan graduate,Loan,Departed,Academy");
+test("Player columns hide age fractions permanently", () => normalizeTable({ cols: [{ id: "A", label: "Age Frac" }, { id: "B", label: "Age Frac Dep" }, { id: "C", label: "Yrs Active" }], rows: [] }, "Players").columns.map(column => column.label).join(",") === "Yrs Active");
+test("Squad-number column is never displayed", () => normalizeTable({ cols: [{ id: "A", label: "Sq #" }, { id: "B", label: "Cl #" }, { id: "C", label: "Pl #" }], rows: [] }, "Players").columns.map(column => column.label).join(",") === "Cl #,Pl #");
+test("Height and weight tables show their units", () => normalizeTable({ cols: [{ id: "A", label: "Height" }, { id: "B", label: "Weight" }], rows: [] }, "Players").columns.map(column => column.label).join(",") === "Height (cm),Weight (kg)");
+const experience = fixture("Players", ["Cl #", "Yrs Active"], [[1, 0], [2, 10], [3, 5]]);
+const experienceFormat = createCellFormatter(experience);
+test("Years active uses the Players white-to-green scale", () => experienceFormat(experience.columns[1], 0).backgroundColor === "rgb(255, 255, 255)" && experienceFormat(experience.columns[1], 10).backgroundColor === "rgb(87, 187, 138)");
+test("Honours competitions group one-off trophies separately", () => competitionGroup("Champions League") === "continental" && competitionGroup("League Two") === "league" && competitionGroup("League Cup") === "cup" && competitionGroup("Super Cup") === "one-off" && competitionGroup("Community Shield") === "one-off");
+const teamStats = fixture("Team_Stats", ["GD", "W%", "Squad Value", "Transfer Profit"], [[-2, 0, 100, -500], [0, 0.5, 200, 0], [3, 1, 300, 500]]);
+const teamStatsFormat = createCellFormatter(teamStats);
+test("Team stats goal difference and transfer profit use signed colours", () => teamStatsFormat(teamStats.columns[0], -2).color === "#ff0000" && teamStatsFormat(teamStats.columns[0], 3).color === "#00a931" && teamStatsFormat(teamStats.columns[3], -500).color === "#ff0000" && teamStatsFormat(teamStats.columns[3], 500).color === "#00a931");
+test("Team win percentage uses red / white / green thresholds", () => [0, 0.5, 1].map(value => teamStatsFormat(teamStats.columns[1], value).backgroundColor).join("|") === "rgb(230, 124, 115)|rgb(255, 255, 255)|rgb(87, 187, 138)");
+test("Team squad value uses min/max shading", () => teamStatsFormat(teamStats.columns[2], 300).backgroundColor === "rgb(87, 187, 138)");
+test("Match rating factor is removed and requested stat timelines are available", () => !Object.keys(TIMELINES).some(name => name.includes("Fac")) && ["GL_G_Timeline", "AS_G_Timeline", "CS_Pct_Timeline", "Wage_Timeline"].every(name => Object.hasOwn(TIMELINES, name)));
+const derivedStats = createSeasonStatTimeline({
+  "25/26": fixture("25/26", ["Cl #", "Name", "GL/G"], [[1, "Player A", 0.5]]),
+  Players_Stats: fixture("Players_Stats", ["Cl #", "Name", "GL/G"], [[1, "Player A", 0.4]]),
+}, ["25/26"], "GL/G", "GL_G_Timeline");
+test("Derived goals-per-game timeline uses season and career totals", () => derivedStats.rows[0]["25/26"].value === 0.5 && derivedStats.rows[0].Total.value === 0.4);
+const playerNumberRoster = fixture("25/26", ["Name", "Pl #"], [["Player A", 17]]);
+const numberedTots = normalizeTable({ cols: [{ id: "A", label: "" }, { id: "B", label: "GK" }, { id: "C", label: "RB" }, { id: "D", label: "RCB" }, { id: "E", label: "LCB" }, { id: "F", label: "LB" }, { id: "G", label: "RDM" }, { id: "H", label: "LDM" }, { id: "I", label: "RM" }, { id: "J", label: "LM" }, { id: "K", label: "CAM" }, { id: "L", label: "ST" }], rows: [{ c: ["25/26", "Player A", ...Array(10).fill(null)].map(value => value === null ? null : { v: value }) }] }, "TotS");
+test("TOTS shirts use the selected-season shirt number, not position", () => seasonLineups(numberedTots, { "25/26": playerNumberRoster })[0].players.find(player => player.position === "GK").number === "17");
+const idTots = normalizeTable({
+  cols: [{ id: "A", label: "Season", type: "string" }, { id: "B", label: "GK", type: "string" }, { id: "C", label: "GK", type: "number" }],
+  rows: [{ c: [{ v: "25/26" }, { v: "Wrong Name" }, { v: 1 }] }, { c: [{ v: "26/27" }, { v: "Wrong Name" }, null] }],
+}, "TotS");
+const idRoster = fixture("25/26", ["Cl #", "Name", "Pl #"], [[1, "Season Name", 17]]);
+const idPlayers = fixture("Players", ["Cl #", "Preferred Name"], [[1, "Current Name"]]);
+test("TOTS prefers ID selections over duplicate name columns", () => {
+  const player = seasonLineups(idTots, { "25/26": idRoster, Players: idPlayers })[0].players.find(player => player.position === "GK");
+  return player.id === "1" && player.name === "Current Name" && player.number === "17";
+});
+test("Blank ID selections never fall back to stale name selections", () => seasonLineups(idTots, { Players: idPlayers })[1].players.every(player => player.name === null));
+const titleTimeline = normalizeTable({
+  cols: ["", "", "", "", "League Two", "", "", "FA Cup", "", ""].map((label, index) => ({ id: `t${index}`, label, type: "string" })),
+  rows: [
+    { c: [null, "Name", "Nat", null, "25/26", "26/27", null, null, "26/27", null].map(v => ({ v })) },
+    { c: [1, "Renamed Player", null, 22, 1, "-", 1, 1, 0, 1].map(v => ({ v })) },
+  ],
+}, "Titles_Timeline");
+test("Titles timeline retains merged competition and season headings, including blank repeated headings", () => seasonTitles(titleTimeline, "1", "25/26").join(",") === "League Two,FA Cup");
+test("Titles timeline ignores totals, blanks and other seasons", () => seasonTitles(titleTimeline, "1", "26/27").length === 0 && seasonTitles(titleTimeline, "99", "25/26").length === 0);
+test("Career winning seasons use competition and player ID, ignoring totals and zeroes", () =>
+  titleSeasons(titleTimeline, "1", "FA Cup").join() === "25/26" &&
+  titleSeasons(titleTimeline, "99", "FA Cup").length === 0 &&
+  titleSeasons(titleTimeline, "1", "League Cup").length === 0);
+const fullCareerSeasons = Array.from({ length: 15 }, (_, index) => `${25 + index}/${26 + index}`);
+const fullCareerTitles = normalizeTable({
+  cols: ["", "", "", "", "FA Cup", ...Array(15).fill("")].map((label, index) => ({ id: `c${index}`, label, type: "number" })),
+  rows: [
+    { c: [null, "Name", "Nat", null, ...fullCareerSeasons, null].map(v => ({ v })) },
+    { c: [1, "Ever-present", null, null, ...Array(15).fill(1), 15].map(v => ({ v })) },
+  ],
+}, "Titles_Timeline");
+test("Career honours retain all fifteen winning seasons without treating the total as another win", () =>
+  titleSeasons(fullCareerTitles, "1", "FA Cup").map(formatSeason).join(", ") === fullCareerSeasons.map(formatSeason).join(", "));
+test("Malformed titles timelines fail explicitly instead of showing empty honours", () => {
+  try { normalizeTable({ cols: [{ id: "A", label: "Name" }], rows: [] }, "Titles_Timeline"); return false; }
+  catch (error) { return error.message.includes("Titles_Timeline"); }
+});
+const sandboxSquad = fixture("26/27", ["Cl #", "Name", "Ovr", "Pot", "Age", "Nat", "Pos1", "Pos2", "Pos3", "Pos4", "Status", "Yt #"], [
+  [1, "Active player", 72, 81.802, 21, "Morocco", "GK", "-", "-", "-", "Active", false],
+  [2, "Loan player", 68, 73, 24, "Guinea", "RB", "RM", "-", "-", "On loan", false],
+  [3, "Departed player", 70, 75, 25, "Congo", "CB", "-", "-", "-", "Departed", false],
+  [null, "Academy player", 60, 80, 17, "Ghana", "ST", "-", "-", "-", "Active", 1],
+  [5, "Loan graduate", 68, 80, 18, "Ghana", "CM", "-", "-", "-", "On loan", 2],
+  [6, "Active graduate", 70, 82, 19, "Ghana", "ST", "-", "-", "-", "Active", 3],
+]);
+sandboxSquad.rows[0][sandboxSquad.columns.find(c => c.label === "Pot").key].text = "82";
+const sandboxProfiles = fixture("Players", ["Cl #", "Age Now"], [[6, 22], [2, 27], [1, 24], [5, null]]);
+const toSandbox = table => clubPlayersForSandbox(table, r => cell(r, table, "Status").value,
+  r => String(cell(r, table, "Cl #").value), r => academyPlayer(r, table), sandboxProfiles);
+const sandboxPlayers = toSandbox(sandboxSquad);
+test("Sandbox uses current Players age matched by club number, not seasonal age", () => sandboxPlayers.map(player => player.age).join(",") === "24,27,,22");
+test("Missing current age stays unknown instead of showing an outdated seasonal age", () => sandboxPlayers.find(player => player.id === "club:5").age === null);
+test("Missing player profile does not fall back to seasonal age", () => clubPlayersForSandbox(
+  sandboxSquad, r => cell(r, sandboxSquad, "Status").value,
+  r => String(cell(r, sandboxSquad, "Cl #").value), r => academyPlayer(r, sandboxSquad),
+  { ...sandboxProfiles, rows: [] }).every(player => player.age === null));
+test("Sandbox includes active and on-loan graduates but excludes departed and academy", () => sandboxPlayers.length === 4 && sandboxPlayers.map(p => p.clubStatus).join() === "Active,On loan,On loan,Active");
+test("Youth IDs do not classify graduates with club numbers as academy players", () => !academyPlayer(sandboxSquad.rows[4], sandboxSquad) && !academyPlayer(sandboxSquad.rows[5], sandboxSquad) && academyPlayer(sandboxSquad.rows[3], sandboxSquad));
+test("Sandbox maps stable club identities, displayed formula ratings and all positions", () => sandboxPlayers[0].id === "club:1" && sandboxPlayers[0].ovr === 72 && sandboxPlayers[0].pot === 82 && sandboxPlayers[1].positions.join() === "RB,RM");
+test("Sandbox rejects invalid eligible records with player context instead of silently skipping", () => {
+  const broken = { ...sandboxSquad, rows: sandboxSquad.rows.map((r, i) => i ? r : { ...r, [sandboxSquad.columns.find(c => c.label === "Ovr").key]: { value: null, text: "" } }) };
+  try { toSandbox(broken); return false; } catch (error) { return error.message.includes("Active player") && error.message.includes("OVR"); }
+});
+test("Sandbox rejects duplicate club identities", () => {
+  try { toSandbox({ ...sandboxSquad, rows: [sandboxSquad.rows[0], sandboxSquad.rows[0]] }); return false; }
+  catch (error) { return error.message.includes("duplicate"); }
+});
+document.querySelector("#results").textContent = results.join("\n");
+document.title = results.some(result => result.startsWith("FAIL")) ? "FAIL" : "PASS";
+</script>
+</body>
+</html>
