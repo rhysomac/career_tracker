@@ -12,10 +12,9 @@ let seasons;
 let selectedSeason;
 let metric = "Ratings_Timeline";
 let query = "";
-let allColumns = false;
 let playerNames = new Map();
 let selectedTotsSeason;
-let selectedSquadGroup = "All";
+const selectedSquadSources = new Set(["Active squad", "On loan"]);
 let selectedProfilePeriod = "Total";
 let selectedProfileMetric = "GL";
 let sandboxFrame;
@@ -52,7 +51,7 @@ function stars(value) {
 }
 
 function columnTitle(label) {
-  return label === "Yrs Active" ? "Years active" : formatSeason(label);
+  return ({ "Yrs Active": "Years active", "Pl #": "Sq#", "Sq #": "Sq#" })[label] || formatSeason(label);
 }
 
 function movementType(label) {
@@ -217,7 +216,7 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
     th.scope = "col";
     th.setAttribute("aria-sort", "none");
     const button = el("button", "", `${columnTitle(column.label)} ↕`);
-    button.title = HELP[column.label] || formatSeason(column.label);
+    button.title = ["Pl #", "Sq #"].includes(column.label) ? "Squad number" : HELP[column.label] || formatSeason(column.label);
     button.addEventListener("click", () => {
       if (sortedKey === column.key) direction = direction === "asc" ? "desc" : "asc";
       else direction = table.sheet === "Pos1_Timeline" || /^(Age|Age Now|AN)$/.test(column.label) || /^(Pos\d*|Join Pos)$/.test(column.label) ? "asc" :
@@ -529,12 +528,19 @@ function profileChart(seasonRecords, target) {
     const minimum = Math.min(0, ...values.map(point => point.value));
     const x = index => points.length === 1 ? 340 : 66 + index * 540 / (points.length - 1);
     const y = value => 206 - (value - minimum) * 176 / (maximum - minimum);
-    const number = value => selectedProfileMetric === "CS%" ? `${Math.round(value * 100)}%` : new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 2 }).format(value);
-    for (let step = 0; step <= 4; step++) {
+    const wholeNumbers = ["Ovr", "Pot"].includes(selectedProfileMetric);
+    const number = value => selectedProfileMetric === "MR" ? value.toFixed(1) :
+      selectedProfileMetric === "CS%" ? `${Math.round(value * 100)}%` :
+        new Intl.NumberFormat(undefined, { notation: wholeNumbers ? "standard" : "compact", maximumFractionDigits: wholeNumbers ? 0 : 2 }).format(value);
+    const ticks = [...new Set(Array.from({ length: 5 }, (_, step) => {
       const value = minimum + (maximum - minimum) * step / 4;
+      return wholeNumbers ? Math.round(value) : value;
+    }))];
+    for (const value of ticks) {
       svg.append(svgNode("line", { x1: 66, x2: 606, y1: y(value), y2: y(value), class: "chart-grid" }),
-        svgNode("text", { x: 57, y: y(value) + 4, "text-anchor": "end" }, number(value)));
+        svgNode("text", { x: 57, y: y(value) + 4, "text-anchor": "end", class: "chart-y-label" }, number(value)));
     }
+    svg.append(svgNode("rect", { x: 66, y: 30, width: 540, height: 176, class: "chart-border" }));
     let previous = null;
     points.forEach((point, index) => {
       const valid = typeof point.value === "number" && Number.isFinite(point.value);
@@ -712,33 +718,29 @@ function render() {
     const roster = playerRows(workbook[selectedSeason]);
     const rows = roster.rows.filter(row => {
       const currentStatus = playerStatus(row, roster);
-      const youth = academyPlayer(row, roster);
-      if (selectedSquadGroup === "Active squad") return currentStatus === "Active" && !youth;
-      if (selectedSquadGroup === "On loan") return currentStatus === "On loan";
-      if (selectedSquadGroup === "Departed") return currentStatus === "Departed";
-      if (selectedSquadGroup === "Youth academy") return youth;
-      return true;
+      const source = academyPlayer(row, roster) ? "Youth academy" : currentStatus === "Active" ? "Active squad" : currentStatus;
+      return selectedSquadSources.has(source);
     });
     const table = withStatus({ ...roster, rows }, row => playerStatus(row, roster));
-    header.append(selectControl("Player group", [
-      ["Active squad", "Active squad"],
-      ["On loan", "On loan"],
-      ["Departed", "Departed"],
-      ["Youth academy", "Youth academy"],
-      ["All", "All"],
-    ], selectedSquadGroup, value => { selectedSquadGroup = value; render(); }));
-    const toolbar = el("div", "view-options");
-    const label = el("label");
-    const checkbox = el("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = allColumns;
-    checkbox.addEventListener("change", () => { allColumns = checkbox.checked; render(); });
-    label.append(checkbox, " Show all columns");
-    toolbar.append(label);
-    view.append(toolbar);
-    const compact = ["Cl #", "Pl #", "Name", "Nat", "Age", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
+    const sources = el("fieldset", "player-sources");
+    sources.append(el("legend", "", "Player source"));
+    for (const source of ["Active squad", "On loan", "Departed", "Youth academy"]) {
+      const label = el("label");
+      const checkbox = el("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = selectedSquadSources.has(source);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selectedSquadSources.add(source);
+        else selectedSquadSources.delete(source);
+        render();
+      });
+      label.append(checkbox, source);
+      sources.append(label);
+    }
+    view.append(sources);
+    const compact = ["Pl #", "Sq #", "Name", "Nat", "Age", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
     const initialSquadSort = rows => sortSquadRows(rows, roster, row => playerStatus(row, roster));
-    renderTable(table, { columns: allColumns ? table.columns : table.columns.filter(column => compact.includes(column.label)), caption: `Squad ${formatSeason(selectedSeason)}`, initialSort: initialSquadSort });
+    renderTable(table, { columns: table.columns.filter(column => compact.includes(column.label)), caption: `Squad ${formatSeason(selectedSeason)}`, initialSort: initialSquadSort });
   } else if (route === "sandbox") {
     heading("Squad sandbox");
     const latestSeason = seasons.at(-1);
@@ -774,7 +776,7 @@ function render() {
       career: ["Players_Stats", "Career stats"],
       honours: ["Player_Titles", "Honours"],
       youth: ["Youth", "Youth academy graduates"],
-      team: ["Team_Stats", "Team stats"],
+      team: ["Team_Stats", "Club stats"],
     };
     const config = pages[route];
     if (!config) { heading("Page not found"); return; }
@@ -785,7 +787,7 @@ function render() {
       const incomplete = [...movementHistories.values()].filter(history => history.issues.length).length;
       if (incomplete) view.append(el("p", "profile-note movement-warning", `Years active is unavailable for ${incomplete} players with incomplete movement records. Open a player profile for details.`));
     }
-    if (route === "honours") {
+    if (["honours", "team"].includes(route)) {
       const legend = el("div", "competition-legend");
       for (const [label, group] of [["European competitions", "continental"], ["League titles", "league"], ["Domestic cups", "cup"], ["One-off cups", "one-off"]]) {
         legend.append(el("span", `competition-legend-item competition-${group}`, label));

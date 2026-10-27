@@ -14,21 +14,47 @@ Open <http://localhost:8080>. Stop the server with Ctrl+C. To use a different po
 
 ## Put it on your phone
 
-Upload this folder's website files to a static web host, such as GitHub Pages. No build step, package installation, database, API key or R server is needed. Open the hosted HTTPS address on your phone; you can also add it to your home screen. The local preview address is only accessible on the computer running it, not on your phone.
+The website repository is [rhysomac/career_tracker](https://github.com/rhysomac/career_tracker). Its GitHub repository page is not the website itself. No build step, package installation, database, API key or R server is needed.
 
-The site is not deployed automatically. You can publish it at no cost with GitHub Pages: create a **public** GitHub repository, upload the complete contents of this folder (including `data/` and `sandbox/`), then open **Settings → Pages**, choose **Deploy from a branch**, select `main` and `/ (root)`, and save. GitHub will provide a free `https://<username>.github.io/<repository>/` address that works on your phone. No paid domain or hosting plan is needed. Hosting does not require uploading a copy of the workbook: the site reads the already link-readable Google Sheet directly from each visitor's browser. Since the sheet is link-readable, people with the site can also access its data.
+### Enable GitHub Pages
+
+1. Sign in to GitHub as the repository owner and open [Settings → Pages](https://github.com/rhysomac/career_tracker/settings/pages).
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Select the **main** branch and **/ (root)** folder, then click **Save**. The website files are already at the repository root; do not select a `docs` folder or upload an enclosing `african_salford_site` folder.
+4. Open the repository's [Actions tab](https://github.com/rhysomac/career_tracker/actions) and wait for the Pages deployment to finish successfully. This can take a few minutes. Settings → Pages will also show the published address.
+5. Open **<https://rhysomac.github.io/career_tracker/>** on your phone.
+
+GitHub Pages is free for public repositories. Uploading files alone does not enable Pages; the settings above must be saved first. Once enabled, commits to `main` trigger deployment of updated website files. No paid domain or hosting plan is needed.
+
+### Add a home-screen shortcut
+
+- **iPhone/iPad:** open the website in Safari, tap **Share**, then **Add to Home Screen**.
+- **Android:** open the website in Chrome, open the three-dot menu, then choose **Add to Home screen** (the wording may vary).
+
+Your computer does not need to be running, and your phone does not need to use the same Wi-Fi. Internet access is required to load the Google Sheet; a home-screen shortcut does not add offline support. The local preview address (`localhost`) refers to the device opening it, so it is not the address to use on your phone.
+
+The site reads the already link-readable Google Sheet directly from each visitor's browser; you do not need to upload a workbook. Sheet edits appear when opening the site or pressing **Refresh data**, without uploading the website again. Since the sheet is link-readable, people with the site can also access its data. Sandbox XIs and created players stay in the browser where you saved them and do not sync between your computer and phone.
+
+### Updating the hosted files and troubleshooting
+
+- To publish local website changes, upload the changed files to `main` using **Add file → Upload files** on GitHub (or commit and push from a Git checkout). Preserve the folder structure, including `data/` and `sandbox/`, and include this README when updating the instructions. Local edits are not automatically copied to GitHub.
+- **404 at the website address:** confirm Pages uses `main` and `/ (root)`, check that the latest Pages deployment succeeded, and use the exact address above, including `/career_tracker/`. An initial deployment may take a few minutes.
+- **Settings → Pages is unavailable:** make sure you are signed in with an account that has administrator access to this repository.
+- **The page opens but data fails to load:** check your internet connection and the sheet's existing **Anyone with the link → Viewer** permission, then press **Refresh data**. Do not make the sheet publicly editable.
+- **Missing pictures or a blank sandbox:** check that the complete `data/` and `sandbox/` folders were uploaded and that filenames retain their exact capitalization.
 
 ## Features and data
 
-- Squad season and player-group selectors for active players, players on loan, departed players, youth academy players, and **All** (the default). Includes Start and all available columns via **Show all columns**; squad number is excluded.
+- Squad has a season selector (including Start) and **Player source** checkboxes for Active squad, On loan, Departed and Youth academy. Active squad and On loan are checked by default; sources can be combined or all unchecked. Selections persist while navigating and changing seasons. The fixed squad columns exclude club number and movement details; there is no Show all columns control. The seasonal `Pl #` field displays as **Sq#** with a Squad number tooltip; internal club IDs still power player links and sorting.
 - Squad defaults to status (active, on loan, departed, current youth academy), primary position, OVR, potential and DOB. Youth graduates sort by their actual status, not their academy history. Players and timelines default to club number; career totals sort descending. Tables can be sorted in either direction using raw values. Age sorts ascending; missing values stay last.
 - Positions sort in the club's GK, RB, CB, LB, CDM, RM, CM, LM, CAM, RW, ST, LW order.
 - Player profiles use the player name and portrait as the identity-card heading, with the current status badge directly below the name and no duplicate page heading or Bio label. Club number, total Years active, Generated Yes/No and Right/Left foot labels use a compact two-column identity grid. Honours sits underneath it in the left sidebar; stats, the career-only chart and then Movements flow independently on the right. Seasonal Movements follows Value and includes only events dated 1 July through 30 June of the selected season; Career shows all recorded movements below the stats timeline. Spell durations and total Years active are unchanged by this date filter. Movements does not wait for the sidebar's height. The layout stacks on mobile.
 - The Period selector offers Career and recorded seasons, controlling stats and honours together. Performance is headed **Career stats** or the selected season, such as **2025-26**. Seasonal **Attributes** combines positions and displays Skill moves and Weak foot as accessible star symbols. Ratings, potential, growth, value/wage changes and average match rating retain spreadsheet colours. Weeks injured is in the selected season's stats; finances are in Value. Only Career shows the statistic-selectable season-by-season chart, with exact values below and gaps for missing data.
+- Stats timeline plots have a solid border around the plotting area. Overall rating and Potential use whole-number y-axis ticks; Average match rating uses one decimal place. Other metrics retain their existing axis formatting.
 - Career honours put total titles before Team of the Season selections. Seasonal honours show Team of the Season Yes/No and the titles won that season, without per-trophy counts, from Titles_Timeline.
 - One timeline page with a dropdown for ratings, match rating, appearances, goals, assists, clean sheets, goals/assists per game, clean-sheet percentage, wage, position and market value. The match-rating-factor timeline is not shown. Colour dots indicate status only for seasons when a player is at the club.
 - Season players without a Cl # are retained in tables. Unique names link historical youth records to their later senior Players entry. Current academy players who have never joined the senior squad have no profile links or pages; current and former squad members retain profiles.
-- Players, Youth academy graduates, Career stats, Honours and Team stats tables. Youth tab labels are YA graduates in the navigation and Youth academy graduates on the page.
+- Players, Youth academy graduates, Career stats, Honours and Club stats tables. Club stats retains the `#team` address and reads Team_Stats; player Career stats is unchanged. Youth tab labels are YA graduates in the navigation and Youth academy graduates on the page.
 - Team of the Season displayed on a pitch with a season dropdown, linked player names, player portraits and the shirt numbers from that season. Selections use the numeric club IDs in TotS, not the accompanying name-based display table. Seasons with no recorded selections show empty positions instead of reusing a previous season's XI.
 - A Salford-inspired white and charcoal theme with red navigation, section and chart accents. Alternating rows and conditional stat colours remain separate from the site theme.
 - Salford logo and club-number player photos, with `000.png` as the default portrait when an individual photo is not present.
@@ -50,7 +76,7 @@ The site recalculates **Years active** consistently for the Players tab and play
 
 Otherwise tables use Google's formatted cell text for display and raw cell values for sorting; spreadsheet formulas are not recalculated. Skill moves and Weak foot also use stars in tables, retaining numeric sorting. Blank cells show a dash, and timeline columns for future seasons are retained.
 
-Conditional colours reproduce the workbook's rating thresholds (50 / 70 / 95), match-rating thresholds (4 / 7 / 10), player Years Active scale, team-stat W% scale and signed goal difference/transfer profit, and honours' green total-count scale/green won-competition text. Honours competitions are grouped as continental competitions, league titles, domestic cups, and one-off cups. Profile statistics colour ratings, potential, growth and average match ratings; profile honours are unformatted. Table colours override alternating row backgrounds; scales use the complete loaded table, so searching or sorting does not change the colours. Rules are implemented in `formatting.js`; the Google data endpoint does not return formatting, so changing the workbook's rules requires updating these definitions.
+Conditional colours reproduce the workbook's rating thresholds (50 / 70 / 95), match-rating thresholds (4 / 7 / 10), player Years Active scale, club-stat W% scale and signed goal difference/transfer profit, and honours' green total-count scale/green won-competition text. Honours and Club stats share competition colours for continental competitions, league titles, domestic cups, and one-off cups, including Super Cup and Community Shield (`C. Shield`). Colours and category stripes apply to every row, including blank/text results, without alternating-row overrides. Profile statistics colour ratings, potential, growth and average match ratings; profile honours are unformatted. Scales use the complete loaded table, so searching or sorting does not change the colours. Rules are implemented in `formatting.js`; the Google data endpoint does not return formatting, so changing the workbook's rules requires updating these definitions.
 
 ## Squad sandbox
 

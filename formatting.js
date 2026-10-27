@@ -9,8 +9,9 @@ const competitionGroups = new Map([
   ["UCL", "continental"], ["UEL", "continental"], ["UECL", "continental"],
   ["Champions League", "continental"], ["Europa League", "continental"], ["Conference League", "continental"],
   ["Premier League", "league"], ["Championship", "league"], ["League One", "league"], ["League Two", "league"],
+  ["League", "league"],
   ["FA Cup", "cup"], ["League Cup", "cup"], ["League Trophy", "cup"], ["L. Cup", "cup"], ["L. Trophy", "cup"],
-  ["Super Cup", "one-off"], ["Community Shield", "one-off"],
+  ["Super Cup", "one-off"], ["Community Shield", "one-off"], ["C. Shield", "one-off"],
 ]);
 const competitionColors = {
   continental: "#e8f0fe",
@@ -71,7 +72,7 @@ export function createCellFormatter(table) {
   }
   return (column, value) => {
     const label = column.label;
-    const group = honours ? competitionGroup(label) : null;
+    const group = honours || table.sheet === "Team_Stats" ? competitionGroup(label) : null;
     const groupStyle = group ? { backgroundColor: competitionColors[group] } : {};
     if (typeof value !== "number" || !Number.isFinite(value)) return groupStyle;
     const range = ranges.get(column.key);
