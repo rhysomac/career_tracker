@@ -17,7 +17,7 @@ export const TIMELINES = {
 
 export const HELP = {
   "Cl #": "Club number", "Pl #": "Player number", Nat: "Nationality",
-  AN: "Age at season end", Pos1: "Primary position", Ovr: "Overall rating",
+  AN: "Age at season end", Age: "Age at season end", Pos1: "Primary position", Ovr: "Overall rating",
   Pot: "Potential", Gr: "Overall growth", SM: "Skill moves", WF: "Weak foot",
   AP: "Appearances", GL: "Goals", AS: "Assists", CS: "Clean sheets",
   MR: "Match rating", "GL/G": "Goals per game", "AS/G": "Assists per game",

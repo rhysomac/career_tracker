@@ -738,9 +738,11 @@ function render() {
       sources.append(label);
     }
     view.append(sources);
-    const compact = ["Pl #", "Sq #", "Name", "Nat", "Age", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
+    const compact = ["Pl #", "Sq #", "Name", "Nat", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
     const initialSquadSort = rows => sortSquadRows(rows, roster, row => playerStatus(row, roster));
-    renderTable(table, { columns: table.columns.filter(column => compact.includes(column.label)), caption: `Squad ${formatSeason(selectedSeason)}`, initialSort: initialSquadSort });
+    const squadColumns = table.columns.filter(column => compact.includes(column.label))
+      .map(column => column.label === "AN" ? { ...column, label: "Age" } : column);
+    renderTable(table, { columns: squadColumns, caption: `Squad ${formatSeason(selectedSeason)}`, initialSort: initialSquadSort });
   } else if (route === "sandbox") {
     heading("Squad sandbox");
     const latestSeason = seasons.at(-1);

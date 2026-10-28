@@ -1,0 +1,303 @@
+[
+  {
+    "id": "005",
+    "kit": "home",
+    "file": "005.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1534302
+  },
+  {
+    "id": "006",
+    "kit": "home",
+    "file": "006.png",
+    "image_source": "AI render reframed to match reference headshot proportions",
+    "size": 1663076
+  },
+  {
+    "id": "007",
+    "kit": "home",
+    "file": "007.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1304363
+  },
+  {
+    "id": "008",
+    "kit": "home",
+    "file": "008.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1251753
+  },
+  {
+    "id": "009",
+    "kit": "goalkeeper",
+    "file": "009.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1477974
+  },
+  {
+    "id": "010",
+    "kit": "home",
+    "file": "010.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1131006
+  },
+  {
+    "id": "011",
+    "kit": "goalkeeper",
+    "file": "011.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1171213
+  },
+  {
+    "id": "012",
+    "kit": "home",
+    "file": "012.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1347637
+  },
+  {
+    "id": "013",
+    "kit": "home",
+    "file": "013.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1279066
+  },
+  {
+    "id": "014",
+    "kit": "home",
+    "file": "014.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1108278
+  },
+  {
+    "id": "015",
+    "kit": "home",
+    "file": "015.PNG",
+    "image_source": "full AI render shown in chat",
+    "size": 1456888
+  },
+  {
+    "id": "016",
+    "kit": "home",
+    "file": "016.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1202402
+  },
+  {
+    "id": "017",
+    "kit": "home",
+    "file": "017.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1500353
+  },
+  {
+    "id": "018",
+    "kit": "home",
+    "file": "018.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1212663
+  },
+  {
+    "id": "019",
+    "kit": "home",
+    "file": "019.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1287293
+  },
+  {
+    "id": "020",
+    "kit": "home",
+    "file": "020.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1267213
+  },
+  {
+    "id": "021",
+    "kit": "home",
+    "file": "021.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1221921
+  },
+  {
+    "id": "022",
+    "kit": "home",
+    "file": "022.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1435527
+  },
+  {
+    "id": "023",
+    "kit": "home",
+    "file": "023.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1278038
+  },
+  {
+    "id": "024",
+    "kit": "home",
+    "file": "024.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1126701
+  },
+  {
+    "id": "025",
+    "kit": "home",
+    "file": "025.PNG",
+    "image_source": "full AI render shown in chat",
+    "size": 1226370
+  },
+  {
+    "id": "026",
+    "kit": "home",
+    "file": "026.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1177921
+  },
+  {
+    "id": "027",
+    "kit": "goalkeeper",
+    "file": "027.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1108326
+  },
+  {
+    "id": "028",
+    "kit": "home",
+    "file": "028.PNG",
+    "image_source": "full AI render shown in chat",
+    "size": 1230912
+  },
+  {
+    "id": "029",
+    "kit": "home",
+    "file": "029.png",
+    "image_source": "AI portrait revised from existing player render",
+    "size": 1445527
+  },
+  {
+    "id": "030",
+    "kit": "home",
+    "file": "030.png",
+    "image_source": "AI portrait revised from existing player render",
+    "size": 1696400
+  },
+  {
+    "id": "031",
+    "kit": "home",
+    "file": "031.png",
+    "image_source": "AI generated headshot",
+    "size": 1371773
+  },
+  {
+    "id": "032",
+    "kit": "home",
+    "file": "032.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1182368
+  },
+  {
+    "id": "033",
+    "kit": "home",
+    "file": "033.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1184554
+  },
+  {
+    "id": "034",
+    "kit": "goalkeeper",
+    "file": "034.png",
+    "image_source": "AI generated headshot",
+    "size": 1370296
+  },
+  {
+    "id": "035",
+    "kit": "home",
+    "file": "035.png",
+    "image_source": "AI generated headshot",
+    "size": 1489795
+  },
+  {
+    "id": "036",
+    "kit": "home",
+    "file": "036.png",
+    "image_source": "AI generated headshot",
+    "size": 1473303
+  },
+  {
+    "id": "037",
+    "kit": "home",
+    "file": "037.png",
+    "image_source": "AI generated headshot",
+    "size": 1506930
+  },
+  {
+    "id": "038",
+    "kit": "home",
+    "file": "038.png",
+    "image_source": "AI generated headshot",
+    "size": 1492944
+  },
+  {
+    "id": "039",
+    "kit": "home",
+    "file": "039.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1271895
+  },
+  {
+    "id": "040",
+    "kit": "goalkeeper",
+    "file": "040.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1146114
+  },
+  {
+    "id": "041",
+    "kit": "home",
+    "file": "041.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1375780
+  },
+  {
+    "id": "042",
+    "kit": "home",
+    "file": "042.png",
+    "image_source": "AI generated headshot",
+    "size": 1609145
+  },
+  {
+    "id": "043",
+    "kit": "home",
+    "file": "043.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1181331
+  },
+  {
+    "id": "044",
+    "kit": "home",
+    "file": "044.png",
+    "image_source": "AI generated headshot",
+    "size": 1450536
+  },
+  {
+    "id": "045",
+    "kit": "home",
+    "file": "045.png",
+    "image_source": "full AI render shown in chat",
+    "size": 1188738
+  },
+  {
+    "id": "046",
+    "kit": "home",
+    "file": "046.png",
+    "image_source": "AI generated headshot",
+    "size": 1458679
+  },
+  {
+    "id": "047",
+    "kit": "goalkeeper",
+    "file": "047.png",
+    "image_source": "AI generated headshot",
+    "size": 1638910
+  }
+]
