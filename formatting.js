@@ -13,12 +13,6 @@ const competitionGroups = new Map([
   ["FA Cup", "cup"], ["League Cup", "cup"], ["League Trophy", "cup"], ["L. Cup", "cup"], ["L. Trophy", "cup"],
   ["Super Cup", "one-off"], ["Community Shield", "one-off"], ["C. Shield", "one-off"],
 ]);
-const competitionColors = {
-  continental: "#e8f0fe",
-  league: "#ddf2f0",
-  cup: "#ffe6dd",
-  "one-off": "#f4e5f7",
-};
 
 export function competitionGroup(label) {
   return competitionGroups.get(label) || null;
@@ -64,7 +58,7 @@ export function createCellFormatter(table) {
   const titleColumns = honours ? table.columns.slice(table.columns.findIndex(column => column.label === "Titles") + 1).map(column => column.label) : [];
   const totalRanges = new Map();
   if (honours) {
-    for (const label of ["Titles", "TotS"]) {
+    for (const label of ["Titles", "TotS", ...titleColumns]) {
       totalRanges.set(label, bounds(table.rows.filter(row => playerId(row, table) !== null)
         .map(row => row[table.columns.find(column => column.label === label)?.key]?.value)
         .filter(value => typeof value === "number" && Number.isFinite(value))));
@@ -72,13 +66,10 @@ export function createCellFormatter(table) {
   }
   return (column, value) => {
     const label = column.label;
-    const group = honours || table.sheet === "Team_Stats" ? competitionGroup(label) : null;
-    const groupStyle = group ? { backgroundColor: competitionColors[group] } : {};
-    if (typeof value !== "number" || !Number.isFinite(value)) return groupStyle;
+    if (typeof value !== "number" || !Number.isFinite(value)) return {};
     const range = ranges.get(column.key);
     const timeline = timelineColumns.includes(column);
     if (honours) {
-      if (titleColumns.includes(label) && value > 0) return { ...groupStyle, color: "#34a853" };
       if (totalRanges.has(label)) {
         const totalRange = totalRanges.get(label);
         return { backgroundColor: scale(value, totalRange.min, totalRange.max) };
@@ -101,10 +92,9 @@ export function createCellFormatter(table) {
       if (label === "Squad Value") return { backgroundColor: scale(value, range.min, range.max) };
       if (["GD", "Transfer Profit"].includes(label) && value !== 0) return { color: value > 0 ? "#00a931" : "#ff0000" };
     }
-    if (groupStyle.backgroundColor) return { ...groupStyle, ...(titleColumns.includes(label) && value > 0 ? { color: "#34a853" } : {}) };
     if (table.sheet === "Val_Timeline" && timeline) return { backgroundColor: scale(value, 0, timelineRange.max) };
     if (statistics.has(label)) return { backgroundColor: scale(value, range.min, range.max) };
-    if (["AP_Timeline", "GL_Timeline", "AS_Timeline", "CS_Timeline", "GL_G_Timeline", "AS_G_Timeline", "CS_Pct_Timeline", "Wage_Timeline"].includes(table.sheet) && (timeline || label === "Total")) {
+    if (["AP_Timeline", "GL_Timeline", "AS_Timeline", "CS_Timeline", "GL_G_Timeline", "AS_G_Timeline", "CS_Pct_Timeline"].includes(table.sheet) && (timeline || ["Total", "Max"].includes(label))) {
       const group = timeline ? timelineRange : range;
       return { backgroundColor: scale(value, group.min, group.max) };
     }

@@ -2,7 +2,7 @@ import { POSITIONS, FORMATION, emptyState, makePlayer, placePlayer, removePlayer
 import { TARGETS_KEY, LINEUP_KEY, LINEUPS_KEY, isClubPlayer, validateTargets, validateLineup, validateLineups, validateClubPlayers, reconcileLineups } from "./integration.js";
 import { NATIONS, nationCode, nationFlag } from "./nations.js";
 import { enablePlayerDragging } from "./drag.js";
-import { formatSeason } from "../data.js";
+import { formatSeason, titleCase } from "../data.js";
 
 const $ = selector => document.querySelector(selector);
 const STORAGE_KEY = "touchline-fc26-v1";
@@ -32,13 +32,13 @@ try {
   if (saved) state = validateState(JSON.parse(saved));
 } catch (error) {
   storageBlocked = true;
-  report(new Error(`Saved sandbox data could not be loaded: ${error.message} Existing saved data has not been overwritten.`));
+  report(new Error(`Saved Squad Builder data could not be loaded: ${error.message} Existing saved data has not been overwritten.`));
 }
 
 function save() {
   if (integrated && !currentSeason) return;
   if (storageBlocked) {
-    $("#save-state").textContent = "Not saved locally";
+    $("#save-state").textContent = "Not Saved Locally";
     return;
   }
   try {
@@ -47,9 +47,9 @@ function save() {
       localStorage.setItem(LINEUP_KEY, JSON.stringify(state.lineup));
       localStorage.setItem(LINEUPS_KEY, JSON.stringify(state.lineups));
     } else localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    $("#save-state").textContent = "Saved on this device";
+    $("#save-state").textContent = "Saved on This Device";
   } catch (error) {
-    $("#save-state").textContent = "Not saved";
+    $("#save-state").textContent = "Not Saved";
     report(new Error(`Local save failed: ${error.message} Browser storage is unavailable.`));
   }
 }
@@ -110,7 +110,7 @@ function render() {
       remove.dataset.remove = player.id;
       remove.setAttribute("aria-label", `Remove ${player.name} from ${slot.id} and return to pool`);
       card.append(remove);
-    } else card.append(element("span", "empty-plus", "+"), element("span", "empty-label", "Add player"));
+    } else card.append(element("span", "empty-plus", "+"), element("span", "empty-label", "Add Player"));
     $("#slots").append(card);
   }
   renderPool();
@@ -172,7 +172,7 @@ function renderPool() {
     details.append(element("span", "player-name", player.name));
     details.append(element("span", "player-meta", `${nationFlag(player.nation)}${player.age === null ? "" : ` · ${player.age}`}`));
     details.append(element("span", "player-positions", player.positions.join(" / ")));
-    details.append(element("span", isClubPlayer(player) ? "club-badge" : "target-badge", isClubPlayer(player) ? `Club squad · ${player.clubStatus}` : "Created player"));
+    details.append(element("span", isClubPlayer(player) ? "club-badge" : "target-badge", isClubPlayer(player) ? `Club Squad · ${titleCase(player.clubStatus)}` : "Created Player"));
     pick.append(details, playerImage(player, "player-photo"));
     const rating = element("span", "player-rating-group");
     rating.append(element("span", `rating ${ratingClass(player.ovr)} player-rating`, player.ovr));
@@ -198,7 +198,7 @@ function renderPool() {
   }
   if (!players.length) {
     const empty = element("div", "empty-pool");
-    empty.append(element("span", "empty-icon", "+"), element("h4", "", state.players.length ? "No matching players" : "Your squad starts here"));
+    empty.append(element("span", "empty-icon", "+"), element("h4", "", state.players.length ? "No Matching Players" : "Your Squad Starts Here"));
     empty.append(element("p", "", state.players.length ? "Try another name, position or player source." : "Add a player to start building your XI."));
     list.append(empty);
   }
@@ -231,14 +231,14 @@ for (const position of POSITIONS) {
   $("#position-filter").append(option);
 }
 const nationSelect = $("#player-form").elements.namedItem("nation");
-nationSelect.append(new Option("Choose a nation", ""));
+nationSelect.append(new Option("Choose a Nation", ""));
 for (const nation of NATIONS) nationSelect.append(new Option(`${nation.flag} ${nation.name}`, nation.code));
 for (let i = 0; i < 4; i++) {
-  const label = element("label", "", i ? `Position ${i + 1}` : "Primary position");
+  const label = element("label", "", i ? `Position ${i + 1}` : "Primary Position");
   const select = element("select");
   select.name = `pos${i + 1}`;
   select.required = i === 0;
-  select.append(new Option(i ? "None" : "Choose position", ""));
+  select.append(new Option(i ? "None" : "Choose Position", ""));
   for (const position of POSITIONS) select.append(new Option(position, position));
   label.append(select);
   $("#position-fields").append(label);
@@ -317,7 +317,7 @@ function openEditor(id = null) {
   editing = id;
   $("#player-form").reset();
   $("#player-error").textContent = "";
-  $("#player-dialog-title").textContent = id ? "Edit player" : "Add player";
+  $("#player-dialog-title").textContent = id ? "Edit Player" : "Add Player";
   $("#delete-player").hidden = !id;
   const player = state.players.find(p => p.id === id);
   if (player) {
@@ -387,14 +387,14 @@ if (integrated) {
         else if (savedLineup) lineups[0] = validateLineup(JSON.parse(savedLineup));
       } catch (error) {
         storageBlocked = true;
-        report(new Error(`Saved sandbox data could not be loaded: ${error.message} It has not been overwritten.`));
+        report(new Error(`Saved Squad Builder data could not be loaded: ${error.message} It has not been overwritten.`));
       }
       const players = [...clubPlayers, ...targets];
       const reconciled = reconcileLineups(lineups, players);
       const removed = lineups.reduce((sum, lineup, index) => sum + Object.keys(lineup).length - Object.keys(reconciled[index]).length, 0);
       state = { version: 1, players, activeLineup: 0, lineups: reconciled, lineup: reconciled[0] };
       selected = null;
-      $("#season-label").textContent = `Squad ratings (${formatSeason(currentSeason)})`;
+      $("#season-label").textContent = `Squad Ratings (${formatSeason(currentSeason)})`;
       $("#add-player").disabled = false;
       const notices = [];
       if (duplicateAssignmentsRemoved) notices.push(`${duplicateAssignmentsRemoved} repeat assignment(s) across XIs were returned to the pool.`);
@@ -408,5 +408,5 @@ if (integrated) {
   new ResizeObserver(reportFrameHeight).observe(document.body);
   window.addEventListener("resize", reportFrameHeight);
 }
-if (storageBlocked) $("#save-state").textContent = "Not saved locally";
+if (storageBlocked) $("#save-state").textContent = "Not Saved Locally";
 render();

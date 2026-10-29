@@ -35,6 +35,10 @@ const fixtures = {
   "26/27": table(statsLabels, [[1, "Test Player", "RM", "ST", null, null, 71, 95, -1, 20, 8, 2, 3, 4, 0.4, 0.1, 0.15, 1200, -200, 600, -100, 0], [null, "Academy Only", "ST", null, null, null, 60, 80, 0, 0, 0, 0, 0, null, null, null, null, 100, 0, 100, 0, 0]]),
 };
 const winningSeasons = Array.from({ length: 15 }, (_, index) => `${25 + index}/${26 + index}`);
+for (const sheet of ["GL_Timeline", "AS_Timeline", "CS_Timeline"]) {
+  fixtures[sheet] = table(["Cl #", "Name", "Nat", "Age", ...winningSeasons, "Total"],
+    [[1, "Test Player", "Ghana", 22, 0, 8]]);
+}
 fixtures.Players.rows.push({ c: [2, "Cup Champion", "Cup Champion", 35, "Y", "R", "Test Club"].map(v => ({ v })) });
 fixtures.Player_Titles = table(["Cl #", "Name", "TotS", "Titles", "League Two", "FA Cup"],
   [[1, "Test Player", 1, 2, 1, 1], [2, "Cup Champion", 15, 15, 0, 15], [3, "No Selections", 0, 0, 0, 0]]);
@@ -47,8 +51,8 @@ fixtures.Titles_Timeline.cols.splice(9, 0, ...winningSeasons.slice(2).map((seaso
 fixtures.Titles_Timeline.rows[0].c.splice(9, 0, ...winningSeasons.slice(2).map(v => ({ v })));
 fixtures.Titles_Timeline.rows[1].c.splice(9, 0, ...Array.from({ length: 13 }, () => ({ v: 0 })));
 fixtures.Titles_Timeline.rows.push({ c: [2, "Cup Champion", null, null, 0, 0, 0, ...Array(15).fill(1), 15].map(v => ({ v })) });
-fixtures.Team_Stats = table(["Season", "W%", "League", "UCL", "FA Cup", "Super Cup", "C. Shield"],
-  [["25/26", 0.5, 1, "-", "Final", "-", null], ["26/27", 0.6, null, "Winner", "-", "Winner", "-"]]);
+fixtures.Team_Stats = table(["Season", "Division", "W%", "League", "UCL", "FA Cup", "Super Cup", "C. Shield"],
+  [["25/26", "League Two", 0.5, 1, "-", "Final", "-", null], ["26/27", "League One", 0.6, null, "Winner", "-", "Winner", "-"]]);
 const addFields = (sheet, labels, values) => {
   const fixture = fixtures[sheet];
   const offset = fixture.cols.length;
@@ -63,6 +67,8 @@ addFields("25/26", movementLabels, [["01/01/2025", "Test Club", 25, "€1,200,00
 addFields("26/27", movementLabels, [[null, null, null, null, null, "01/08/2026", "Second Loan Club", 26, "€0", "Loan 1yr"]]);
 addFields("25/26", ["SM", "WF"], [[3, 4]]);
 addFields("26/27", ["SM", "WF"], [[5, 2]]);
+addFields("25/26", ["Age", "AN"], [[21, 22]]);
+addFields("26/27", ["Age", "AN"], [[22, 23], [16, null]]);
 fixtures.Players.rows.push({ c: fixtures.Players.cols.map(column => ({ v: ({
   "Cl #": 4, "Preferred Name": "Boundary Player", "Full Name": "Boundary Player",
 })[column.label] ?? null })) });
@@ -77,9 +83,59 @@ for (const season of ["25/26", "26/27"]) {
   })[column.label] ?? null })) });
 }
 addFields("26/27", ["Pl #"], [[7], [8], [9]]);
+addFields("25/26", ["Pl #", "Yt#"], [[7, null]]);
+fixtures["25/26"].rows.push(...[
+  { "Cl #": 2, Name: "Test Player", "Yt#": "Y002", Age: 17, AN: 18, Pos1: "GK", Ovr: 60, Pot: 80 },
+  { Name: "Test Player", Age: 16, Pos1: "ST", Ovr: 50, Pot: 70 },
+].map(values => ({ c: fixtures["25/26"].cols.map(column => ({ v: values[column.label] ?? null })) })));
 fixtures["26/27"].rows.push({ c: fixtures["26/27"].cols.map(column => ({ v: ({
   "Cl #": 2, Name: "Cup Champion", "Pl #": 10, Pos1: "ST", Ovr: 70, Pot: 80,
 })[column.label] ?? null })) });
+const awardPositions = ["GK", "RB", "RCB", "LCB", "LB", "RDM", "LDM", "RM", "LM", "CAM", "ST"];
+const awardRow = (season, entries, ids) => {
+  const values = Array(33).fill(null);
+  values[0] = season;
+  for (const [label, name] of Object.entries(entries)) values[awardPositions.indexOf(label) + 1] = name;
+  values[21] = season;
+  awardPositions.forEach((position, index) => { values[22 + index] = ids[position] ?? null; });
+  return values;
+};
+fixtures.Season_Awards = table(Array(33).fill(""), [
+  ["ToTS"], [null, ...awardPositions],
+  ...fixtures.TotS.rows.map(row => awardRow(row.c[0].v, { RM: row.c[1]?.v, GK: "Cup Champion" }, { RM: row.c[2]?.v, GK: row.c[3]?.v })),
+  ["Other"], [null, "Captain", "PotS", "YPotS", "Top Scorer", "Top Assists", "Most CS"],
+  ["25/26", "Test Player", "Cup Champion", null, "Test Player (8)", null, "Test Player, Cup Champion (3)"],
+  ["26/27", null, null, null, "Cup Champion (2)"],
+]);
+addFields("Players", ["Nat", "Height", "Weight", "Birthplace", "Body Type"], [["Tanzania", 180, 75, "Test City", "Lean"]]);
+addFields("Player_Titles", ["Champions League"], [[0], [0], [0]]);
+fixtures.Player_Titles.rows.push({ c: fixtures.Player_Titles.cols.map(column => ({ v: ({
+  Name: "SALFORD CITY", Titles: 2, TotS: 0, "League Two": 1, "FA Cup": 1, "Champions League": 0,
+})[column.label] ?? null })) });
+for (const season of ["25/26", "26/27"]) {
+  for (const [label, text] of [["GL/G", season === "25/26" ? "0.00" : "0.40"],
+    ["AS/G", season === "25/26" ? "0.20" : "0.10"], ["CS%", season === "25/26" ? "10%" : "15%"]]) {
+    fixtures[season].rows[0].c[fixtures[season].cols.findIndex(column => column.label === label)].f = text;
+  }
+}
+const leaderboardRows = [[], [], [], [], []];
+for (let group = 0; group < 4; group++) {
+  const offset = 14 + group * 5;
+  for (const header of [0, 3]) {
+    leaderboardRows[header][offset + 1] = "Name";
+    leaderboardRows[header][offset + 2] = "Pos";
+    leaderboardRows[header + 1][offset] = 1;
+    leaderboardRows[header + 1][offset + 1] = "Test Player";
+    leaderboardRows[header + 1][offset + 2] = "RM";
+    leaderboardRows[header + 1][offset + 3] = 8;
+  }
+}
+fixtures.Players_Stats.cols.push(...Array.from({ length: 34 - fixtures.Players_Stats.cols.length }, (_, index) => ({ id: `lb${index}`, label: "", type: "string" })));
+leaderboardRows.forEach((values, index) => {
+  const row = fixtures.Players_Stats.rows[index] || { c: [] };
+  values.forEach((value, offset) => { if (value !== undefined) row.c[offset] = { v: value }; });
+  fixtures.Players_Stats.rows[index] = row;
+});
 const setup = `
 window.addEventListener("error", event => { document.querySelector("#error").textContent = event.message; });
 window.addEventListener("unhandledrejection", event => { document.querySelector("#error").textContent = String(event.reason); });
@@ -110,13 +166,14 @@ try {
   const doc = frame.contentDocument;
   const period = () => doc.querySelector(".profile-toolbar select");
   const choose = (control, value) => { control.value = value; control.dispatchEvent(new frame.contentWindow.Event("change", { bubbles: true })); };
-  const stat = label => [...doc.querySelectorAll(".profile-stats > div")].find(item => item.querySelector("dt").textContent === label);
+  const { titleCase } = await import("./data.js");
+  const stat = label => [...doc.querySelectorAll(".profile-stats > div")].find(item => item.querySelector("dt").textContent === titleCase(label === "Overall growth" ? "Growth" : label));
   test("Career is the default and offers only recorded seasons", () => assert([...period().options].map(option => option.text).join() === "Career,2025-26,2026-27", "Unexpected periods"));
   test("Shared period control precedes both honours and stats", () => assert(
     doc.querySelector(".profile-toolbar").compareDocumentPosition(doc.querySelector(".profile-layout")) & Node.DOCUMENT_POSITION_FOLLOWING,
     "Period control should be above both columns"));
-  test("Career honours show aggregate titles and selections", () => assert(doc.querySelector(".profile-honour-totals").textContent.includes("Total titles2") && doc.querySelector(".profile-honour-totals").textContent.includes("selections1"), "Career totals missing"));
-  test("Career titles precede Team of the Season selections", () => assert(doc.querySelector(".profile-honour-totals dt").textContent === "Total titles", "Titles should be first"));
+  test("Career honours show aggregate titles and selections", () => assert(doc.querySelector(".profile-honour-totals").textContent.includes("Total Titles2") && doc.querySelector(".profile-honour-totals").textContent.includes("Selections1"), "Career totals missing"));
+  test("Career titles precede Team of the Season selections", () => assert(doc.querySelector(".profile-honour-totals dt").textContent === "Total Titles", "Titles should be first"));
   test("Career Team of the Season years use player IDs, not stale names", () => assert(
     doc.querySelector(".tots-seasons").textContent === "2025-26", "Wrong selection seasons"));
   test("Career honours fill the identity sidebar rather than floating in the stats column", () => assert(
@@ -133,7 +190,7 @@ try {
   test("Identity card keeps portrait, status and expanded labels but not movements", () => {
     const identity = doc.querySelector(".bio-header").parentElement;
     assert(identity.querySelector(".portrait") && identity.querySelector(".status-badge") &&
-      identity.textContent.includes("Club number1") && identity.textContent.includes("GeneratedYes") &&
+      identity.querySelector(".bio-club-number").textContent === "#1" && identity.textContent.includes("GeneratedYes") &&
       identity.textContent.includes("FootRight") && !identity.textContent.includes("Test Club"), "Identity content incorrect");
   });
   test("Status sits below the name without a Status field", () => assert(
@@ -143,7 +200,21 @@ try {
   test("Identity details use two columns on desktop", () => assert(
     frame.contentWindow.getComputedStyle(doc.querySelector(".bio-header + .details")).gridTemplateColumns.split(" ").length === 2,
     "Identity details are too tall"));
-  test("Career performance heading is Career stats", () => assert(stat("Appearances").closest("section").querySelector("h3").textContent === "Career stats", "Wrong career heading"));
+  test("The nationality flag sits at the top right of the identity header", () => {
+    const header = doc.querySelector(".bio-header").getBoundingClientRect();
+    const flag = doc.querySelector(".bio-nationality").getBoundingClientRect();
+    assert(flag.top - header.top < 25 && header.right - flag.right < 25 &&
+      doc.querySelector(".bio-nationality").parentElement.classList.contains("bio-header"), "Flag is not top-right");
+    assert(Math.abs(flag.top - doc.querySelector(".bio-club-number").getBoundingClientRect().top) < 3,
+      "Flag and club number are not vertically aligned");
+  });
+  test("Bio fields have the requested row-major order, units and header nationality", () => assert(
+    [...doc.querySelectorAll(".bio-header + .details dt")].map(term => term.textContent).join("|") ===
+      "Full Name|Age|DOB|Birthplace|Height|Weight|Body Type|Foot|Years Active|Generated" &&
+    doc.querySelector(".bio-nationality").getAttribute("aria-label") === "Tanzania" &&
+    doc.querySelector(".bio-header + .details").textContent.includes("180 cm") &&
+    doc.querySelector(".bio-header + .details").textContent.includes("75 kg"), "Wrong bio layout"));
+  test("Career performance heading is Career Stats", () => assert(stat("Appearances").closest("section").querySelector("h3").textContent === "Career Stats", "Wrong career heading"));
   test("Chart plots true zero and nonzero values in Career", () => assert(doc.querySelectorAll(".chart-dot").length === 2 && doc.querySelectorAll(".chart-line").length === 1 && doc.querySelector(".chart-values").textContent.includes("2025-260"), "Chart values incorrect"));
   for (const metric of ["Ovr", "Pot"]) {
     choose(doc.querySelector(".profile-chart select"), metric);
@@ -177,12 +248,12 @@ try {
       rows[3][5] === "1-year loan" && rows[3][6] === "-", `Wrong movement rows: ${JSON.stringify(rows)}`);
   });
   test("Total Years active excludes both loans and replaces the old sheet total", () => assert(
-    doc.querySelector(".profile-bio").textContent.includes("Years active1.1") &&
+    doc.querySelector(".profile-bio").textContent.includes("Years Active1.1") &&
     !doc.querySelector(".profile-bio").textContent.includes("999"), "Incorrect active total"));
   test("Career Movements follows the timeline and spells out Years active", () => assert(
     doc.querySelector(".profile-main > .profile-movements") &&
     doc.querySelector(".profile-movements").previousElementSibling.classList.contains("profile-chart") &&
-    doc.querySelector(".profile-movements thead").textContent.includes("Years active"), "Wrong movement layout or labels"));
+    doc.querySelector(".profile-movements thead").textContent.includes("Years Active"), "Wrong movement layout or labels"));
   test("Movements has no routine footer disclaimer", () => assert(
     !doc.querySelector(".profile-movements > .profile-note"), "Unwanted movement footer"));
   test("Desktop layout has Bio and Stats in separate columns", () => assert(frame.contentWindow.getComputedStyle(doc.querySelector(".profile-layout")).gridTemplateColumns.split(" ").length === 2, "Not two columns"));
@@ -198,6 +269,12 @@ try {
   test("Attributes and season headings replace the old names", () => assert(
     stat("Positions").closest("section").querySelector("h3").textContent === "Attributes" &&
     stat("Appearances").closest("section").querySelector("h3").textContent === "2025-26", "Wrong seasonal headings"));
+  test("Season attributes use four columns, two rows and the exact field order", () => assert(
+    [...doc.querySelectorAll(".profile-attributes dt")].map(term => term.textContent).join("|") ===
+      "Positions|Age at Season End|Skill Moves|Weak Foot|Overall Rating|Potential|Growth" &&
+    stat("Age at Season End").querySelector("dd").textContent === "22" &&
+    frame.contentWindow.getComputedStyle(doc.querySelector(".profile-attributes")).gridTemplateColumns.split(" ").length === 4,
+    "Wrong attribute order, layout or age"));
   test("Season movements immediately follow Value without a sidebar-sized gap", () => {
     const movements = doc.querySelector(".profile-movements");
     const previous = movements.previousElementSibling;
@@ -233,7 +310,7 @@ try {
   choose(period(), "Total");
   test("Returning to Career restores the timeline and chosen metric", () => assert(
     doc.querySelector(".profile-chart select").value === "AP" &&
-    stat("Appearances").closest("section").querySelector("h3").textContent === "Career stats", "Career did not restore"));
+    stat("Appearances").closest("section").querySelector("h3").textContent === "Career Stats", "Career did not restore"));
   frame.style.width = "390px";
   await new Promise(resolve => setTimeout(resolve, 50));
   test("Phone layout stacks Bio and Stats", () => assert(frame.contentWindow.getComputedStyle(doc.querySelector(".profile-layout")).gridTemplateColumns.split(" ").length === 1, "Phone columns not stacked"));
@@ -243,13 +320,19 @@ try {
   frame.contentWindow.location.hash = "#players";
   await new Promise(resolve => setTimeout(resolve, 50));
   test("Players tab uses the same recalculated active total and unabbreviated heading", () => {
-    const index = [...doc.querySelectorAll("th")].findIndex(th => th.textContent.includes("Years active"));
+    const index = [...doc.querySelectorAll("th")].findIndex(th => th.textContent.includes("Years Active"));
     const row = [...doc.querySelectorAll("tbody tr")].find(row => row.querySelector('a[href="#player/1"]'));
     assert(index >= 0 && row.cells[index].textContent === "1.1", "Players total differs from profile");
   });
+  test("Players display Age, expanded Foot and Gen, and a headshot in every name cell", () => assert(
+    doc.querySelector('th button[title="Age"]').textContent.startsWith("Age ") &&
+    !doc.querySelector("thead").textContent.includes("Age Now") &&
+    doc.querySelector("tbody").textContent.includes("Right") &&
+    doc.querySelector("tbody").textContent.includes("Yes") &&
+    [...doc.querySelectorAll("tbody .name-column")].every(cell => cell.querySelector("img")), "Wrong player table display"));
   frame.contentWindow.location.hash = "#squad";
   await new Promise(resolve => setTimeout(resolve, 50));
-  const sourceInput = label => [...doc.querySelectorAll(".player-sources label")].find(item => item.textContent === label).querySelector("input");
+  const sourceInput = label => [...doc.querySelectorAll(".player-sources label")].find(item => item.textContent === titleCase(label)).querySelector("input");
   const toggleSource = label => { const input = sourceInput(label); input.checked = !input.checked; input.dispatchEvent(new frame.contentWindow.Event("change")); };
   test("Squad defaults to active and on-loan sources only", () => assert(
     sourceInput("Active squad").checked && sourceInput("On loan").checked &&
@@ -261,7 +344,7 @@ try {
     doc.querySelectorAll(".player-sources input").length === 4 && doc.querySelectorAll("#view select").length === 1 &&
     !doc.querySelector(".view-options") && !doc.querySelector("thead").textContent.includes("Cl #") &&
     doc.querySelector("thead").textContent.includes("Sq#") &&
-    doc.querySelector('th button[title="Squad number"]'), "Squad columns or controls incorrect"));
+    doc.querySelector('th button[title="Squad Number"]'), "Squad columns or controls incorrect"));
   toggleSource("Youth academy");
   test("Current academy players have no profile link", () => {
     const row = [...doc.querySelectorAll("tbody tr")].find(row => row.textContent.includes("Academy Only"));
@@ -284,8 +367,21 @@ try {
   test("Player source selections persist when changing season", () => assert(
     sourceInput("Active squad").checked && sourceInput("On loan").checked &&
     !sourceInput("Departed").checked && !sourceInput("Youth academy").checked, "Sources reset on season change"));
+  toggleSource("Youth academy");
+  test("Historical youth identities use only club numbers even when names double up", () => {
+    const nameRows = [...doc.querySelectorAll("tbody tr")].filter(row =>
+      row.querySelector(".name-column")?.textContent === "Test Player");
+    const identities = nameRows.map(row => row.querySelector("a")?.getAttribute("href") || null);
+    assert(identities.includes("#player/1") && identities.includes("#player/2") && identities.includes(null),
+      `Names overrode club numbers: ${JSON.stringify(identities)}`);
+    const youth = nameRows.find(row => row.querySelector('a[href="#player/2"]'));
+    const age = [...doc.querySelectorAll("th button")].find(button => button.title === "Age").parentElement.cellIndex;
+    assert(youth.querySelector("img").getAttribute("src").includes("002.") && youth.cells[age].textContent === "17" &&
+      youth.querySelector(".status-badge").textContent === "Youth Academy", "Youth age, portrait or historical status incorrect");
+  });
+  toggleSource("Youth academy");
   choose(doc.querySelector("#view select"), "26/27");
-  const squadNumberHeader = [...doc.querySelectorAll("th button")].find(button => button.title === "Squad number");
+  const squadNumberHeader = [...doc.querySelectorAll("th button")].find(button => button.title === "Squad Number");
   squadNumberHeader.click();
   if (squadNumberHeader.parentElement.getAttribute("aria-sort") === "descending") squadNumberHeader.click();
   test("Sq# sorting keeps numeric source values and profile links", () => assert(
@@ -295,6 +391,7 @@ try {
   await new Promise(resolve => setTimeout(resolve, 50));
   test("Direct academy profile addresses do not open profiles", () => assert(doc.querySelector("h2").textContent === "Player not found" && !doc.querySelector(".profile-layout"), "Academy profile still accessible"));
   frame.contentWindow.location.hash = "#tots";
+  frame.style.width = "1200px";
   await new Promise(resolve => setTimeout(resolve, 50));
   const lineupSeason = doc.querySelector("#view select");
   lineupSeason.value = "25/26"; lineupSeason.dispatchEvent(new frame.contentWindow.Event("change"));
@@ -305,23 +402,125 @@ try {
       card.querySelector("img").getAttribute("src").includes("001.") &&
       !card.textContent.includes("Outdated Name"), `ID-based lineup failed: ${card.innerHTML}`);
   });
+  test("Season Awards shows all six award cards, portraits and counts", () => assert(
+    doc.querySelectorAll(".award-card").length === 6 &&
+    doc.querySelector(".award-card a").getAttribute("href") === "#player/1" &&
+    doc.querySelector(".award-card img") &&
+    doc.querySelector(".season-awards-other").textContent.includes("(8)") &&
+    doc.querySelectorAll(".award-card:last-child .table-player").length === 2, "Missing awards"));
+  test("Season Awards uses full traditional title-case award names", () => assert(
+    [...doc.querySelectorAll(".award-card h3")].map(term => term.textContent).join("|") ===
+      "Captain:|Player of the Season:|Young Player of the Season:|Top Scorer:|Top Assists:|Most Clean Sheets:",
+    "Abbreviated award names remain"));
+  test("Desktop pitch uses available width and its player cards do not overlap", () => {
+    for (const width of [1920, 1366, 1024, 390]) {
+      frame.style.width = `${width}px`;
+      const cards = [...doc.querySelectorAll(".formation-player")].map(node => node.getBoundingClientRect());
+      assert(cards.every((card, index) => cards.slice(index + 1).every(other =>
+        card.right <= other.left || other.right <= card.left || card.bottom <= other.top || other.bottom <= card.top)),
+        `Pitch player cards overlap at ${width}px`);
+    }
+    frame.style.width = "1200px";
+  });
+  choose(doc.querySelector("#view select"), "Timeline");
+  test("Season Awards Timeline joins eleven positions and six awards without duplicate seasons", () => assert(
+    doc.querySelectorAll('th[scope="col"]').length === 18 &&
+    doc.querySelectorAll("tbody tr").length === 15 &&
+    doc.querySelector("tbody").textContent.includes("Test Player") &&
+    doc.querySelector("tbody img"), "Wrong awards timeline"));
+  test("Timeline places awards before positions under a clear Team of the Season group", () => {
+    const columns = [...doc.querySelectorAll('th[scope="col"] button')].map(button => button.textContent.replace(/ [↕↑↓]$/, ""));
+    const groups = [...doc.querySelectorAll('th[scope="colgroup"]')];
+    assert(columns.slice(0, 8).join("|") ===
+      "Season|Captain|Player of the Season|Young Player of the Season|Top Scorer|Top Assists|Most Clean Sheets|GK" &&
+      groups.at(-1).textContent === "Team of the Season" && groups.at(-1).colSpan === 11,
+      "Award order or ToTS group heading incorrect");
+  });
+  choose(doc.querySelector("#view select"), "26/27");
+  test("Unrecorded seasons keep an empty pitch but show recorded awards", () => assert(
+    doc.querySelector('[data-position="RM"]').textContent.includes("Not selected") &&
+    doc.querySelector(".season-awards-other").textContent.includes("Cup Champion") &&
+    !doc.querySelector(".award-card:first-child a"), "Awards leaked across seasons"));
+  frame.contentWindow.location.hash = "#career";
+  await new Promise(resolve => setTimeout(resolve, 50));
+  test("Player Stats has a separate eight-statistic leaderboard with mini portraits", () => assert(
+    doc.querySelector("h2").textContent === "Player Stats" &&
+    doc.querySelectorAll(".stats-leaderboard option").length === 8 &&
+    doc.querySelector(".stats-leaderboard tbody img") &&
+    doc.querySelector(".career-table tbody img"), "Missing player stats surfaces"));
+  frame.style.width = "1200px";
+  await new Promise(resolve => setTimeout(resolve, 50));
+  test("Player Stats and Stats Leaderboard headings and column headers align exactly", () => {
+    const headings = [...doc.querySelectorAll(".player-stats-heading h2")].map(node => node.getBoundingClientRect());
+    const tables = [...doc.querySelectorAll(".player-stats-layout thead")].map(node => node.getBoundingClientRect());
+    assert(Math.abs(headings[0].top - headings[1].top) < 1 && Math.abs(tables[0].top - tables[1].top) < 1,
+      `Misaligned titles or tables: ${JSON.stringify({ headings, tables })}`);
+  });
+  for (const option of [...doc.querySelectorAll(".stats-leaderboard option")]) {
+    choose(doc.querySelector(".stats-leaderboard select"), option.value);
+    test(`Leaderboard ${option.value} uses sheet rankings`, () => assert(doc.querySelector(".stats-leaderboard tbody tr td").textContent === "1", "Lost rank"));
+  }
   frame.contentWindow.location.hash = "#timelines";
   await new Promise(resolve => setTimeout(resolve, 50));
   test("Timeline headers use expanded years and retain conditional formatting", () => assert(
     doc.querySelector("thead").textContent.includes("2025-26") &&
     !doc.querySelector("thead").textContent.includes("25/26") &&
     [...doc.querySelectorAll("td")].some(item => item.style.backgroundColor), "Timeline labels or colours lost"));
+  test("Timelines include current status and exclude wage", () => assert(
+    [...doc.querySelectorAll("th")].some(th => th.textContent.startsWith("Status")) &&
+    doc.querySelector("tbody .status-badge") &&
+    ![...doc.querySelectorAll("#view option")].some(option => option.value === "Wage_Timeline"), "Wrong timeline status or choices"));
+  for (const [metric, expected] of [["GL_G_Timeline", "0.40"], ["AS_G_Timeline", "0.10"], ["CS_Pct_Timeline", "15%"]]) {
+    choose(doc.querySelector("#view select"), metric);
+    test(`${metric} displays compact formatted values with the other timeline features`, () => {
+      const headers = [...doc.querySelectorAll("th")];
+      const index = headers.findIndex(th => th.textContent.includes("2026-27"));
+      const row = [...doc.querySelectorAll("tbody tr")].find(row => row.querySelector('a[href="#player/1"]'));
+      assert(row.cells[index].textContent === expected && row.cells[index].style.backgroundColor &&
+        row.cells[index].querySelector(".season-indicator") && row.querySelector(".status-badge"),
+        "Timeline formatting, colours or statuses lost");
+    });
+    test(`${metric} has every season column and the count timeline's player details`, () => {
+      const headings = [...doc.querySelectorAll("th button")].map(button => button.title);
+      assert(headings.join("|") === ["Club Number", "Name", "Status", "Nationality", "Age",
+        ...winningSeasons.map(season => `20${season.slice(0, 2)}-${season.slice(3)}`), "Max"].join("|"),
+        `Wrong timeline columns: ${headings.join(", ")}`);
+      const index = headings.indexOf("2027-28");
+      const row = [...doc.querySelectorAll("tbody tr")].find(row => row.querySelector('a[href="#player/1"]'));
+      assert(row.cells[index].textContent === "—" && row.cells[headings.indexOf("Nationality")].textContent === "Ghana",
+        "Future season or player details missing");
+      const max = row.cells[headings.indexOf("Max")];
+      assert(max.textContent === (metric === "AS_G_Timeline" ? "0.20" : expected) && max.style.backgroundColor,
+        "Max is not the formatted best seasonal rate");
+    });
+  }
   frame.contentWindow.location.hash = "#team";
   await new Promise(resolve => setTimeout(resolve, 50));
-  test("Team stats is renamed Club stats", () => assert(doc.querySelector("h2").textContent === "Club stats", "Wrong club page heading"));
-  test("Club competition colours apply to every row including text, blanks and new cups", () => {
-    for (const [label, expected] of [["League", "rgb(221, 242, 240)"], ["UCL", "rgb(232, 240, 254)"], ["FA Cup", "rgb(255, 230, 221)"], ["Super Cup", "rgb(244, 229, 247)"], ["C. Shield", "rgb(244, 229, 247)"]]) {
+  test("Team stats is renamed Club Stats", () => assert(doc.querySelector("h2").textContent === "Club Stats", "Wrong club page heading"));
+  test("Club competitions use neutral group separators without coloured stripes", () => {
+    for (const label of ["League", "UCL", "FA Cup", "Super Cup", "C. Shield"]) {
       const index = [...doc.querySelectorAll("th")].findIndex(th => th.textContent.startsWith(label));
       for (const row of doc.querySelectorAll("tbody tr")) {
-        assert(frame.contentWindow.getComputedStyle(row.cells[index]).backgroundColor === expected, `Missing ${label} row colour`);
-        assert(frame.contentWindow.getComputedStyle(row.cells[index]).backgroundImage.includes("linear-gradient"), `Missing ${label} stripe`);
+        assert(frame.contentWindow.getComputedStyle(row.cells[index]).backgroundImage === "none", `Unexpected ${label} stripe`);
       }
     }
+    assert(doc.querySelectorAll("th.competition-start").length === 4, "Missing group separators");
+  });
+  test("Club Stats shows only trophy icons for wins with centred, unshaded result cells", () => {
+    const headers = [...doc.querySelectorAll("th")];
+    assert(!doc.querySelector("th .title-icon") && doc.querySelectorAll("tbody .title-icon").length === 3, "Trophies should appear only for wins");
+    for (const [season, label] of [["2025-26", "League"], ["2026-27", "UCL"], ["2026-27", "Super Cup"]]) {
+      const row = [...doc.querySelectorAll("tbody tr")].find(row => row.cells[0].textContent === season);
+      const index = headers.findIndex(th => th.textContent.startsWith(label));
+      const cell = row.cells[index];
+      assert(cell.textContent === "" && cell.querySelector('img[alt$="Winner"]') && !cell.style.backgroundColor &&
+        frame.contentWindow.getComputedStyle(cell).textAlign === "center", `Wrong winning result: ${season} ${label}`);
+    }
+    const future = [...doc.querySelectorAll("tbody tr")].find(row => row.cells[0].textContent === "2026-27");
+    assert(!future.cells[headers.findIndex(th => th.textContent.startsWith("League"))].querySelector("img"),
+      "An unwon league shows a trophy");
+    assert([...doc.querySelectorAll("tbody td, th button")].every(cell =>
+      frame.contentWindow.getComputedStyle(cell).textAlign === "center"), "Club columns are not centred");
   });
   test("Team stats display and search expanded season labels", () => {
     const search = doc.querySelector('input[type="search"]');
@@ -333,15 +532,30 @@ try {
   });
   frame.contentWindow.location.hash = "#honours";
   await new Promise(resolve => setTimeout(resolve, 50));
-  test("Honours table headings include trophy images", () => assert(doc.querySelectorAll("th .title-icon").length === 2, "Missing table trophies"));
-  test("Honours competition colours and stripes survive alternating rows", () => {
+  test("Honours table headings include trophy images", () => assert(doc.querySelectorAll("th .title-icon").length === 3, "Missing table trophies"));
+  test("Salford City's aggregate Honours row has the club badge and bold text without a player link", () => {
+    const row = doc.querySelector(".club-honours");
+    const name = row?.querySelector(".name-column");
+    assert(name?.querySelector('img[src="data/logo/salford.png"]') && name.querySelector("strong")?.textContent === "SALFORD CITY" &&
+      !name.querySelector("a") && frame.contentWindow.getComputedStyle(row).fontWeight === "700",
+      "Club row is rendered as a player");
+    assert(doc.querySelector('a[href="#player/1"]')?.closest("td").querySelector('img[src*="players/001"]'),
+      "Ordinary player portraits changed");
+  });
+  test("Honours places league competitions before European competitions", () => {
+    const labels = [...doc.querySelectorAll("th button")].map(button => button.title);
+    assert(labels.indexOf("League Two") >= 0 && labels.indexOf("Champions League") > labels.indexOf("League Two"),
+      "European competitions precede leagues");
+  });
+  test("Honours competition counts use background scales without stripes or coloured numbers", () => {
     const index = [...doc.querySelectorAll("th")].findIndex(th => th.textContent.startsWith("FA Cup"));
     for (const row of doc.querySelectorAll("tbody tr")) {
       const style = frame.contentWindow.getComputedStyle(row.cells[index]);
-      assert(style.backgroundColor === "rgb(255, 230, 221)" && style.backgroundImage.includes("linear-gradient"), "Alternating row lost honour colour");
+      assert(style.backgroundImage === "none" && row.cells[index].style.backgroundColor && !row.cells[index].style.color, "Wrong honour formatting");
     }
   });
   frame.contentWindow.location.hash = "#player/2";
+  frame.style.width = "390px";
   await new Promise(resolve => setTimeout(resolve, 50));
   test("All fifteen career winning seasons wrap on a phone without overflow", () => {
     const seasons = doc.querySelector(".honour-seasons");
@@ -366,7 +580,7 @@ try {
   frame.contentWindow.location.hash = "#player/3";
   await new Promise(resolve => setTimeout(resolve, 50));
   test("No Team of the Season selections does not invent a season history", () => assert(
-    !doc.querySelector(".tots-seasons") && doc.querySelector(".profile-honour-totals").textContent.includes("selections0"),
+    !doc.querySelector(".tots-seasons") && doc.querySelector(".profile-honour-totals").textContent.includes("Selections0"),
     "Unexpected selection history"));
   frame.contentWindow.location.hash = "#player/4";
   await new Promise(resolve => setTimeout(resolve, 50));

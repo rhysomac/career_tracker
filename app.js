@@ -1,4 +1,5 @@
-import { TIMELINES, HELP, loadWorkbook, cell, playerId, isMissing, sortRows, sortSquadRows, seasonLineups, seasonTitles, titleSeasons, formatSeason, academyPlayer } from "./data.js";
+import { TIMELINES, HELP, LEADERBOARD_METRICS, loadWorkbook, cell, playerId, isMissing, sortRows, sortSquadRows, seasonLineups, seasonTitles, titleSeasons, formatSeason, academyPlayer, titleCase, awardTitle } from "./data.js";
+import { nationCode, nationFlag, nationName } from "./sandbox/nations.js";
 import { competitionGroup, createCellFormatter } from "./formatting.js";
 import { clubPlayersForSandbox } from "./sandbox-roster.js";
 import { buildMovementHistories, applyActiveYears } from "./movements.js";
@@ -20,6 +21,7 @@ let selectedProfileMetric = "GL";
 let sandboxFrame;
 let sandboxRoster;
 let movementHistories;
+let leaderboardMetric = "AP";
 
 window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.source !== sandboxFrame?.contentWindow || !sandboxRoster) return;
@@ -51,7 +53,56 @@ function stars(value) {
 }
 
 function columnTitle(label) {
-  return ({ "Yrs Active": "Years active", "Pl #": "Sq#", "Sq #": "Sq#" })[label] || formatSeason(label);
+  return ({ "Yrs Active": "Years Active", "Age Now": "Age", AN: "Age", "Pl #": "Sq#", "Sq #": "Sq#",
+    "Height (cm)": "Height", "Weight (kg)": "Weight", "Champions League": "UCL", "Europa League": "UEL",
+    "Conference League": "UECL", "Premier League": "PL", Championship: "CH", "League One": "L1", "League Two": "L2",
+    "League Cup": "L. Cup", "League Trophy": "L. Trophy", "Community Shield": "C. Shield" })[label] || awardTitle(formatSeason(label));
+}
+
+function displayText(label, text) {
+  if (label === "Foot") return ({ R: "Right", L: "Left" })[text.toUpperCase()] || text;
+  if (label === "Gen") return ({ Y: "Yes", N: "No" })[text.toUpperCase()] || text;
+  return formatSeason(text);
+}
+
+function playerPhoto(id, name, className = "mini-headshot") {
+  const image = el("img", className);
+  image.alt = `Portrait of ${name}`;
+  image.loading = "lazy";
+  const stem = id && /^\d+$/.test(id) ? id.padStart(3, "0") : "000";
+  const sources = [`data/players/${stem}.png`, `data/players/${stem}.PNG`];
+  if (stem !== "000") sources.push("data/players/000.png");
+  let index = 0;
+  image.addEventListener("error", () => {
+    if (++index < sources.length) image.src = sources[index];
+    else image.replaceWith(el("span", "photo-unavailable", "Photo unavailable"));
+  });
+  image.src = sources[0];
+  return image;
+}
+
+function playerIdentity(id, name) {
+  const identity = el("span", "table-player");
+  identity.append(playerPhoto(id, name), id ? playerLink(id, name) : el("span", "", name));
+  return identity;
+}
+
+function awardPlayers(entry) {
+  if (!entry || isMissing(entry.value)) return el("span", "", "—");
+  const group = el("span", "award-players");
+  for (const selection of entry.players || [{ text: entry.text, id: null }]) {
+    const count = /\s*(\(\d+\))$/.exec(selection.text)?.[1] || "";
+    const names = selection.text.replace(/\s*\(\d+\)$/, "").split(/,\s*/);
+    for (const name of names) {
+      const id = names.length === 1 && selection.id || playerNames.get(name);
+      const record = id && findPlayerRow(workbook.Players, id);
+      const preferred = record ? cell(record, workbook.Players, "Preferred Name").text : name;
+      const identity = playerIdentity(id, preferred);
+      if (count) identity.append(el("span", "award-count", count));
+      group.append(identity);
+    }
+  }
+  return group;
 }
 
 function movementType(label) {
@@ -66,7 +117,7 @@ function playerLink(id, name) {
 }
 
 function titleIcon(title) {
-  const name = ({ UCL: "Champions League", UEL: "Europa League", UECL: "Conference League", "L. Cup": "League Cup", "L. Trophy": "League Trophy" })[title] || title;
+  const name = ({ UCL: "Champions League", UEL: "Europa League", UECL: "Conference League", "L. Cup": "League Cup", "L. Trophy": "League Trophy", "C. Shield": "Community Shield" })[title] || title;
   if (!competitionGroup(name)) return null;
   const image = el("img", "title-icon");
   image.src = `data/titles/${name.toLowerCase().replaceAll(" ", "-")}.png`;
@@ -83,15 +134,12 @@ function playerStatus(row, table) {
   const departureType = cell(row, table, "Dep Type").value;
   if (!isMissing(departureType) && /loan/i.test(String(departureType))) return "On loan";
   if (!isMissing(cell(row, table, "Dep Date").value)) return "Departed";
-  if (isMissing(cell(row, table, "Cl #").value)) return "Youth academy";
+  if (academyPlayer(row, table)) return "Youth academy";
   return "Active";
 }
 
 function recordId(row, table) {
-  const id = playerId(row, table);
-  if (id) return id;
-  const name = cell(row, table, "Preferred Name").value || cell(row, table, "Name").value;
-  return isMissing(name) ? null : playerNames.get(name) || null;
+  return playerId(row, table);
 }
 
 function findPlayerRow(table, id) {
@@ -148,14 +196,14 @@ function withTimelineStatuses(table, idForRow = row => recordId(row, table)) {
 }
 
 function statusBadge(label) {
-  return el("span", `status-badge status-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`, label);
+  return el("span", `status-badge status-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`, titleCase(label));
 }
 
 function timelineLegend() {
   const legend = el("div", "status-legend");
   for (const label of ["Active", "On loan", "Departed", "Youth academy"]) {
     const item = el("span", "legend-item");
-    item.append(el("span", `season-indicator status-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`), el("span", "", label));
+    item.append(el("span", `season-indicator status-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`), el("span", "", titleCase(label)));
     legend.append(item);
   }
   return legend;
@@ -174,19 +222,22 @@ function selectControl(label, options, value, onChange) {
   const wrapper = el("label", "control");
   const select = el("select");
   for (const [key, text] of options) {
-    const option = el("option", "", formatSeason(text));
+    const option = el("option", "", titleCase(formatSeason(text)));
     option.value = key;
     select.append(option);
   }
   select.value = value;
   select.addEventListener("change", () => onChange(select.value));
-  wrapper.append(el("span", "", label), select);
+  wrapper.append(el("span", "", titleCase(label)), select);
   return wrapper;
 }
 
-function renderTable(table, { columns = table.columns, linkedNames = true, searchable = true, caption = "Spreadsheet data", format = true, defaultSort = null, defaultDirection = "desc", initialSort = null } = {}) {
+function renderTable(table, { columns = table.columns, linkedNames = true, searchable = true, caption = "Spreadsheet data", format = true, defaultSort = null, defaultDirection = "desc", initialSort = null, toolsContent = null } = {}) {
   const container = el("section", "table-panel");
+  if (table.sheet === "Player_Titles") container.classList.add("honours-table");
+  if (table.sheet === "Team_Stats") container.classList.add("club-stats-table");
   const tools = el("div", "table-tools");
+  if (toolsContent) tools.append(toolsContent);
   const formatCell = format ? createCellFormatter(table) : () => ({});
   let search;
   if (searchable) {
@@ -212,11 +263,13 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
   const headers = new Map();
   for (const column of columns) {
     const th = el("th", ["Name", "Preferred Name"].includes(column.label) ? "name-column" : "");
-    if (competitionGroup(column.label)) th.classList.add(`competition-${competitionGroup(column.label)}`);
+    const group = competitionGroup(column.label);
+    const previousGroup = competitionGroup(columns[columns.indexOf(column) - 1]?.label);
+    if (group && group !== previousGroup) th.classList.add("competition-start");
     th.scope = "col";
     th.setAttribute("aria-sort", "none");
     const button = el("button", "", `${columnTitle(column.label)} ↕`);
-    button.title = ["Pl #", "Sq #"].includes(column.label) ? "Squad number" : HELP[column.label] || formatSeason(column.label);
+    button.title = titleCase(["Pl #", "Sq #"].includes(column.label) ? "Squad number" : HELP[column.label] || awardTitle(formatSeason(column.label)));
     button.addEventListener("click", () => {
       if (sortedKey === column.key) direction = direction === "asc" ? "desc" : "asc";
       else direction = table.sheet === "Pos1_Timeline" || /^(Age|Age Now|AN)$/.test(column.label) || /^(Pos\d*|Join Pos)$/.test(column.label) ? "asc" :
@@ -231,7 +284,7 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
   function drawRows() {
     const needle = (search?.value || "").trim().toLocaleLowerCase();
     let rows = table.rows.filter(row => !needle || columns.some(column =>
-      row[column.key].text.toLocaleLowerCase().includes(needle) || formatSeason(row[column.key].text).toLocaleLowerCase().includes(needle)));
+      displayText(column.label, row[column.key].text).toLocaleLowerCase().includes(needle) || formatSeason(row[column.key].text).toLocaleLowerCase().includes(needle)));
     if (sortedKey) rows = sortRows(rows, sortedKey, direction,
       table.sheet === "Pos1_Timeline" ? "Pos1" : headers.get(sortedKey)?.column.label);
     else if (initialSort) rows = initialSort(rows);
@@ -247,22 +300,48 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
     for (const row of rows) {
       const tr = el("tr");
       const id = recordId(row, table);
+      const isClub = table.sheet === "Player_Titles" && !id &&
+        cell(row, table, "Name").text.trim().toUpperCase() === "SALFORD CITY";
+      if (isClub) tr.classList.add("club-honours");
       for (const column of columns) {
         const entry = row[column.key];
         const missing = isMissing(entry.value);
         const td = el("td", typeof entry.value === "number" ? "numeric" : "");
         const isName = ["Name", "Preferred Name"].includes(column.label);
         if (isName) td.classList.add("name-column");
-        if (competitionGroup(column.label)) td.classList.add(`competition-${competitionGroup(column.label)}`);
-        const linkedId = isName ? id || playerNames.get(entry.text) : null;
+        if (headers.get(column.key).th.classList.contains("competition-start")) td.classList.add("competition-start");
+        const linkedId = isName ? id || (table.isLeaderboard ? playerNames.get(entry.text) : null) : null;
         if (column.label === "Status") td.append(statusBadge(entry.text));
-        else if (linkedNames && linkedId) td.append(playerLink(linkedId, entry.text));
+        else if (entry.players) td.append(awardPlayers(entry));
+        else if (isName && isClub) {
+          const identity = el("span", "table-player");
+          const badge = el("img", "mini-headshot club-badge");
+          badge.src = "data/logo/salford.png";
+          badge.alt = "Salford City";
+          identity.append(badge, el("strong", "", entry.text));
+          td.append(identity);
+        }
+        else if (isName && !missing) td.append(playerIdentity(linkedNames ? linkedId : null, entry.text));
         else if (!missing && ["SM", "WF"].includes(column.label)) td.append(stars(entry.value));
-        else td.textContent = missing ? "—" : formatSeason(entry.text);
+        else td.textContent = missing ? "—" : displayText(column.label, entry.text);
         if (column.label === "Yrs Active" && missing && movementHistories?.get(id)?.issues.length) {
           td.title = movementHistories.get(id).issues.join(" ");
         }
         Object.assign(td.style, entry.style || formatCell(column, entry.value));
+        if (table.sheet === "Team_Stats" && competitionGroup(column.label) &&
+            (String(entry.value).trim().toLowerCase() === "winner" || (column.label === "League" && entry.value === 1))) {
+          const competition = column.label === "League" ? cell(row, table, "Division").text : column.label;
+          const icon = titleIcon(competition);
+          if (icon) {
+            icon.alt = `${competition} Winner`;
+            icon.removeAttribute("aria-hidden");
+            td.replaceChildren(icon);
+            td.title = `${competition}: Winner`;
+          } else {
+            td.title = `Trophy icon unavailable for ${competition}.`;
+            console.error(`Trophy icon unavailable for ${competition}.`);
+          }
+        }
         const seasonStatus = row.__timelineStatuses?.[column.key];
         if (seasonStatus && !["Not at club", "Not played yet"].includes(seasonStatus)) {
           const indicator = el("span", `season-indicator status-${seasonStatus.toLowerCase().replace(/[^a-z]+/g, "-")}`);
@@ -283,13 +362,29 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
     }
   }
   search?.addEventListener("input", () => { query = search.value; drawRows(); });
+  if (columns.some(column => column.group)) {
+    const groups = el("tr", "column-groups");
+    for (const column of columns) {
+      const previous = groups.lastElementChild;
+      const label = column.group || "";
+      if (previous && previous.textContent === label) previous.colSpan += 1;
+      else {
+        const group = el("th", "", label);
+        group.scope = "colgroup";
+        group.colSpan = 1;
+        groups.append(group);
+      }
+    }
+    thead.append(groups);
+  }
   thead.append(head);
   grid.append(title, thead, tbody);
   scroller.append(grid);
-  if (searchable) container.append(tools);
+  if (searchable || toolsContent) container.append(tools);
   container.append(scroller);
   view.append(container);
   drawRows();
+  return container;
 }
 
 function profileBio(record, source, person, name, portrait, target) {
@@ -328,18 +423,38 @@ function profileBio(record, source, person, name, portrait, target) {
   const section = el("section", "detail-section");
   const header = el("div", "bio-header");
   const identity = el("div", "bio-identity");
+  const clubNumber = cell(record, source, "Cl #").text;
+  if (clubNumber) identity.append(el("span", "bio-club-number", `#${clubNumber}`));
   identity.append(el("h2", "", name), statusBadge(person ? statusForPlayerTab(person, players) : playerStatus(record, source)));
+  const nationality = cell(record, source, "Nat").text;
+  if (nationality) {
+    const flag = el("span", "bio-nationality", nationFlag(nationality));
+    flag.title = nationName(nationality);
+    flag.setAttribute("aria-label", nationName(nationality));
+    const code = nationCode(nationality);
+    if (code) {
+      const image = el("img");
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+      image.referrerPolicy = "no-referrer";
+      image.addEventListener("load", () => flag.replaceChildren(image));
+      image.addEventListener("error", () => { flag.title = `Flag image unavailable: ${nationName(nationality)}`; });
+      image.src = `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
+    }
+    header.append(flag);
+  }
   header.append(portrait, identity);
   section.append(header);
   const list = el("dl", "details");
-  for (const { label, value } of bio.values()) {
+  for (const label of ["Full Name", "Age", "DOB", "Birthplace", "Height (cm)", "Weight (kg)", "Body Type", "Foot", "Yrs Active", "Gen"]) {
+    const value = bio.get(label)?.value || statusEntry("—");
     const item = el("div");
     const unit = label === "Height (cm)" ? "cm" : label === "Weight (kg)" ? "kg" : "";
     let display = unit && !new RegExp(`\\s${unit}$`, "i").test(value.text) ? `${value.text} ${unit}` : value.text;
     if (label === "Gen") display = ({ Y: "Yes", N: "No" })[value.text.toUpperCase()] || value.text;
     if (label === "Foot") display = ({ R: "Right", L: "Left" })[value.text.toUpperCase()] || value.text;
-    const title = ({ Gen: "Generated" })[label] || HELP[label] || label;
-    item.append(el("dt", "", title), el("dd", "", display));
+    const title = ({ Gen: "Generated", "Height (cm)": "Height", "Weight (kg)": "Weight" })[label] || HELP[label] || label;
+    item.append(el("dt", "", titleCase(title)), el("dd", "", display));
     list.append(item);
   }
   section.append(list);
@@ -352,9 +467,9 @@ function profileStats(record, table, target, career = false) {
     return;
   }
   const formatter = createCellFormatter(table);
-  const labels = { MR: "Average match rating", "Inj Wks": "Weeks injured", CV: "Change in value", CW: "Change in wage" };
-  const groups = career ? [["Career stats", ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%"]]] : [
-    ["Attributes", ["Positions", "Ovr", "Pot", "Gr", "SM", "WF"]],
+  const labels = { MR: "Average Match Rating", "Inj Wks": "Weeks Injured", CV: "Change in Value", CW: "Change in Wage", AN: "Age at Season End", Gr: "Growth" };
+  const groups = career ? [["Career Stats", ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%"]]] : [
+    ["Attributes", ["Positions", "AN", "SM", "WF", "Ovr", "Pot", "Gr"]],
     [formatSeason(table.sheet), ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Inj Wks"]],
     ["Value", ["Val", "Wage", "CV", "CW"]],
   ];
@@ -362,6 +477,7 @@ function profileStats(record, table, target, career = false) {
     const section = el("section", "detail-section");
     section.append(el("h3", "", title));
     const list = el("dl", "details profile-stats");
+    if (title === "Attributes") list.classList.add("profile-attributes");
     for (const label of fields) {
       const positions = label === "Positions" ? [...new Set([1, 2, 3, 4].map(i => cell(record, table, `Pos${i}`).text).filter(value => !isMissing(value)))] : [];
       const value = label === "Positions" ? { value: positions.join("/"), text: positions.join("/") } : cell(record, table, label);
@@ -370,7 +486,7 @@ function profileStats(record, table, target, career = false) {
       const detail = el("dd");
       if (["SM", "WF"].includes(label)) detail.append(stars(value.value));
       else detail.textContent = value.text;
-      item.append(el("dt", "", labels[label] || HELP[label] || label), detail);
+      item.append(el("dt", "", titleCase(labels[label] || HELP[label] || label)), detail);
       const column = table.columns.find(column => column.label === label);
       if (column && ["Ovr", "Pot", "Gr", "MR", "CV", "CW"].includes(label)) Object.assign(item.style, formatter(column, value.value));
       list.append(item);
@@ -398,7 +514,7 @@ function profileMovements(id, target, season = null) {
     table.append(el("caption", "sr-only", "Player movements"));
     const head = el("thead");
     const headings = el("tr");
-    for (const label of ["Movement", "Date", "From / To", "Age", "Fee", "Transfer type", "Years active"]) {
+    for (const label of ["Movement", "Date", "From / To", "Age", "Fee", "Transfer Type", "Years Active"]) {
       const th = el("th", "", label);
       th.scope = "col";
       headings.append(th);
@@ -422,7 +538,7 @@ function profileMovements(id, target, season = null) {
 
 function profileHonours(id, target = view, season = null) {
   const selections = seasonLineups(workbook.TotS, workbook).filter(lineup =>
-    lineup.players.some(player => (player.id || playerNames.get(player.name)) === id));
+    lineup.players.some(player => player.id === id));
   if (season) {
     const selected = selections.some(lineup => lineup.season === season);
     const section = el("section", "detail-section honours-section");
@@ -451,7 +567,7 @@ function profileHonours(id, target = view, season = null) {
   const record = honours.rows.find(row => recordId(row, honours) === id);
   const rows = [];
   if (record) {
-    for (const label of ["TotS", "Titles", "Champions League", "Europa League", "Conference League", "Premier League", "Championship", "League One", "League Two", "FA Cup", "League Cup", "League Trophy", "Super Cup", "Community Shield"]) {
+    for (const label of ["TotS", "Titles", "Premier League", "Championship", "League One", "League Two", "Champions League", "Europa League", "Conference League", "FA Cup", "League Cup", "League Trophy", "Super Cup", "Community Shield"]) {
       const value = cell(record, honours, label);
       if (typeof value.value === "number" && (value.value > 0 || ["TotS", "Titles"].includes(label))) rows.push({ honour: { value: label, text: label }, count: { value: value.value, text: value.text } });
     }
@@ -478,7 +594,7 @@ function profileHonours(id, target = view, season = null) {
           ? selections.map(lineup => formatSeason(lineup.season)).join(", ")
           : "Selection seasons not recorded."));
       }
-      item.append(el("dt", "", row.honour.text === "Titles" ? "Total titles" : "Team of the Season selections"), detail);
+      item.append(el("dt", "", row.honour.text === "Titles" ? "Total Titles" : "Team of the Season Selections"), detail);
       totalList.append(item);
     }
     section.append(totalList);
@@ -506,7 +622,7 @@ function profileChart(seasonRecords, target) {
   const metrics = { AP: "Appearances", GL: "Goals", AS: "Assists", CS: "Clean sheets", "GL/G": "Goals per game", "AS/G": "Assists per game", "CS%": "Clean sheet percentage", MR: "Average match rating", Ovr: "Overall rating", Pot: "Potential", Val: "Market value", Wage: "Wage" };
   const section = el("section", "detail-section profile-chart");
   const header = el("div", "profile-section-heading");
-  header.append(el("h3", "", "Stats timeline"), selectControl("Statistic", Object.entries(metrics), selectedProfileMetric, value => {
+  header.append(el("h3", "", "Stats Timeline"), selectControl("Statistic", Object.entries(metrics), selectedProfileMetric, value => {
     selectedProfileMetric = value;
     section.replaceWith(profileChart(seasonRecords, target));
   }));
@@ -590,27 +706,7 @@ function profile(id) {
   toolbar.append(back);
   view.append(toolbar);
   const portrait = el("div", "portrait");
-  const image = el("img");
-  image.alt = `Portrait of ${name}`;
-  const placeholder = el("span", "", name.split(/\s+/).map(word => word[0]).slice(0, 2).join(""));
-  portrait.append(placeholder);
-  const photoStatus = el("p", "photo-status", "Photo not yet added");
-  const clubNumber = Number(cell(record, source, "Cl #").value);
-  const imageStem = Number.isInteger(clubNumber) ? String(clubNumber).padStart(3, "0") : "000";
-  const photoSources = [`data/players/${imageStem}.png`, `data/players/${imageStem}.PNG`];
-  if (imageStem !== "000") photoSources.push("data/players/000.png");
-  let photoIndex = 0;
-  image.addEventListener("load", () => { placeholder.replaceWith(image); photoStatus.remove(); });
-  image.addEventListener("error", () => {
-    photoIndex += 1;
-    if (photoIndex < photoSources.length) image.src = photoSources[photoIndex];
-    else {
-      image.remove();
-      photoStatus.remove();
-    }
-  });
-  image.src = photoSources[photoIndex];
-  portrait.append(photoStatus);
+  portrait.append(playerPhoto(id, name, "profile-photo"));
 
   const layout = el("div", "profile-layout");
   const bioColumn = el("aside", "profile-bio");
@@ -646,15 +742,31 @@ function profile(id) {
 
 function renderTeamOfSeason() {
   const lineups = seasonLineups(workbook.TotS, workbook);
-  const header = heading("Team of the Season");
+  const header = heading("Season Awards");
   if (!lineups.length) {
     view.append(el("p", "empty", "No Team of the Season records found."));
     return;
   }
-  if (!lineups.some(lineup => lineup.season === selectedTotsSeason)) {
+  if (selectedTotsSeason !== "Timeline" && !lineups.some(lineup => lineup.season === selectedTotsSeason)) {
     selectedTotsSeason = [...lineups].reverse().find(lineup => lineup.players.some(player => !isMissing(player.name)))?.season || lineups[0].season;
   }
-  header.append(selectControl("Season", lineups.map(lineup => [lineup.season, lineup.season]), selectedTotsSeason, value => { selectedTotsSeason = value; render(); }));
+  header.append(selectControl("View", [["Timeline", "Timeline"], ...lineups.map(lineup => [lineup.season, lineup.season])], selectedTotsSeason, value => { selectedTotsSeason = value; render(); }));
+  const awards = workbook.Season_Awards.awards;
+  if (selectedTotsSeason === "Timeline") {
+    const table = workbook.Season_Awards;
+    const columns = [table.columns[0],
+      ...awards.columns.slice(1).map(column => ({ ...column, key: `award-${column.key}`, group: "Season Awards" })),
+      ...table.columns.slice(1).map(column => ({ ...column, group: "Team of the Season" }))];
+    const rows = table.rows.map(row => {
+      const season = cell(row, table, "Season").value;
+      const awardRow = awards.rows.find(entry => cell(entry, awards, "Season").value === season);
+      return { ...row, ...Object.fromEntries(awards.columns.slice(1).map(column =>
+        [`award-${column.key}`, awardRow?.[column.key] || statusEntry("")])) };
+    });
+    const panel = renderTable({ ...table, columns, rows }, { caption: "Season Awards Timeline", searchable: true });
+    panel.classList.add("awards-timeline");
+    return;
+  }
   const lineup = lineups.find(entry => entry.season === selectedTotsSeason);
   const panel = el("section", "formation-panel");
   panel.append(el("h3", "formation-title", formatSeason(lineup.season)));
@@ -673,35 +785,55 @@ function renderTeamOfSeason() {
     const card = el("div", "formation-name");
     const name = isMissing(player.name) ? "Not selected" : player.name;
     card.append(el("span", "sr-only", `${player.position}, number ${player.number || "unknown"}: `));
-    const id = player.id || playerNames.get(player.name);
-    const playerRecord = id && workbook.Players.rows.find(row => playerId(row, workbook.Players) === id);
-    const clubNumber = Number(cell(playerRecord, workbook.Players, "Cl #").value);
-    const imageStem = Number.isInteger(clubNumber) ? String(clubNumber).padStart(3, "0") : "000";
-    const portrait = el("img", "tots-player-photo");
-    portrait.alt = isMissing(player.name) ? "" : `Portrait of ${player.name}`;
-    const photoSources = [`data/players/${imageStem}.png`, `data/players/${imageStem}.PNG`];
-    if (imageStem !== "000") photoSources.push("data/players/000.png");
-    let photoIndex = 0;
-    portrait.addEventListener("error", () => {
-      photoIndex += 1;
-      if (photoIndex < photoSources.length) portrait.src = photoSources[photoIndex];
-      else portrait.remove();
-    });
-    portrait.src = photoSources[photoIndex];
+    const id = player.id;
     card.append(id ? playerLink(id, name) : el("span", "", name));
-    if (!isMissing(player.name)) card.prepend(portrait);
+    if (!isMissing(player.name)) card.prepend(playerPhoto(id, name, "tots-player-photo"));
     slot.append(shirt, card);
     pitch.append(slot);
   }
   panel.append(pitch);
-  view.append(panel);
+  const layout = el("div", "season-awards-layout");
+  const other = el("aside", "season-awards-other");
+  const awardRow = awards.rows.find(row => cell(row, awards, "Season").value === selectedTotsSeason);
+  for (const column of awards.columns.slice(1)) {
+    const box = el("section", "detail-section award-card");
+    box.append(el("h3", "", `${awardTitle(column.label)}:`), awardPlayers(awardRow?.[column.key]));
+    other.append(box);
+  }
+  layout.append(panel, other);
+  view.append(layout);
+}
+
+function renderPlayerStats(table) {
+  const section = heading("Player Stats");
+  section.classList.add("player-stats-heading");
+  const layout = el("div", "player-stats-layout");
+  const stats = el("div", "career-table");
+  const leaderboard = el("aside", "stats-leaderboard");
+  leaderboard.append(el("h2", "mobile-leaderboard-title", "Stats Leaderboard"));
+  layout.append(stats, leaderboard);
+  view.append(layout);
+  const statsPanel = renderTable(table, { caption: "Player Stats", defaultSort: "AP" });
+  stats.append(statsPanel);
+  const header = el("div", "leaderboard-heading");
+  section.append(el("h2", "leaderboard-title", "Stats Leaderboard"));
+  header.append(selectControl("Statistic", LEADERBOARD_METRICS.map(key => [key, HELP[key]]), leaderboardMetric, value => {
+    leaderboardMetric = value;
+    render();
+  }));
+  const rankings = table.leaderboards?.[leaderboardMetric];
+  if (!rankings) {
+    leaderboard.append(el("p", "movement-warning", "This statistic's leaderboard is missing from Players_Stats."));
+    return;
+  }
+  leaderboard.append(renderTable(rankings, { caption: `${titleCase(HELP[leaderboardMetric])} Leaderboard`, searchable: false, toolsContent: header }));
 }
 
 function render() {
   if (!workbook) return;
   view.replaceChildren();
   const [page, id] = location.hash.slice(1).split("/");
-  const route = page || "squad";
+  const route = page === "sandbox" ? "builder" : page || "squad";
   sandboxFrame = null;
   sandboxRoster = null;
   document.querySelectorAll("[data-nav]").forEach(link => {
@@ -723,7 +855,7 @@ function render() {
     });
     const table = withStatus({ ...roster, rows }, row => playerStatus(row, roster));
     const sources = el("fieldset", "player-sources");
-    sources.append(el("legend", "", "Player source"));
+    sources.append(el("legend", "", "Player Source"));
     for (const source of ["Active squad", "On loan", "Departed", "Youth academy"]) {
       const label = el("label");
       const checkbox = el("input");
@@ -734,17 +866,17 @@ function render() {
         else selectedSquadSources.delete(source);
         render();
       });
-      label.append(checkbox, source);
+      label.append(checkbox, titleCase(source));
       sources.append(label);
     }
     view.append(sources);
-    const compact = ["Pl #", "Sq #", "Name", "Nat", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
+    const compact = ["Pl #", "Sq #", "Name", "Nat", "Age", "AN", "Pos1", "Pos2", "Pos3", "Pos4", "Ovr", "Pot", "Gr", "SM", "WF", "AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Cnt YR", "Val", "Value", "CV", "Wage", "CW", "Inj Wks", "Status"];
     const initialSquadSort = rows => sortSquadRows(rows, roster, row => playerStatus(row, roster));
-    const squadColumns = table.columns.filter(column => compact.includes(column.label))
+    const squadColumns = table.columns.filter(column => compact.includes(column.label) && (column.label !== "AN" || !table.columns.some(entry => entry.label === "Age")))
       .map(column => column.label === "AN" ? { ...column, label: "Age" } : column);
     renderTable(table, { columns: squadColumns, caption: `Squad ${formatSeason(selectedSeason)}`, initialSort: initialSquadSort });
-  } else if (route === "sandbox") {
-    heading("Squad sandbox");
+  } else if (route === "builder") {
+    heading("Squad Builder");
     const latestSeason = seasons.at(-1);
     try {
       const table = playerRows(workbook[latestSeason]);
@@ -754,17 +886,17 @@ function render() {
         row => academyPlayer(row, table), workbook.Players);
       sandboxRoster = { type: "touchline-roster", season: latestSeason, players };
       sandboxFrame = el("iframe", "sandbox-frame");
-      sandboxFrame.title = "Latest squad sandbox";
+      sandboxFrame.title = "Squad Builder";
       sandboxFrame.src = "sandbox/index.html?integrated=1";
       view.append(sandboxFrame);
     } catch (error) {
-      view.append(el("p", "sandbox-error", `Sandbox could not load the squad: ${error.message} Check the latest squad's player details and refresh data.`));
+      view.append(el("p", "sandbox-error", `Squad Builder could not load the squad: ${error.message} Check the latest squad's player details and refresh data.`));
     }
   } else if (route === "timelines") {
     const header = heading("Timelines");
     header.append(selectControl("Timeline", Object.entries(TIMELINES), metric, value => { metric = value; render(); }));
     view.append(timelineLegend());
-    const timeline = withTimelineStatuses(playerRows(workbook[metric]));
+    const timeline = withStatus(withTimelineStatuses(playerRows(workbook[metric])), row => statusForPlayerTab(row, workbook[metric]));
     renderTable(timeline, {
       caption: `${TIMELINES[metric]} timeline`,
       defaultSort: "Cl #",
@@ -775,27 +907,33 @@ function render() {
   } else {
     const pages = {
       players: ["Players", "Players"],
-      career: ["Players_Stats", "Career stats"],
+      career: ["Players_Stats", "Player Stats"],
       honours: ["Player_Titles", "Honours"],
-      youth: ["Youth", "Youth academy graduates"],
-      team: ["Team_Stats", "Club stats"],
+      youth: ["Youth", "YA Graduates"],
+      team: ["Team_Stats", "Club Stats"],
     };
     const config = pages[route];
     if (!config) { heading("Page not found"); return; }
-    heading(config[1]);
+    if (route !== "career") heading(config[1]);
     let table = ["players", "career"].includes(route) ? playerRows(workbook[config[0]]) : workbook[config[0]];
     if (route === "players") {
       table = withStatus(table, row => statusForPlayerTab(row, workbook.Players));
       const incomplete = [...movementHistories.values()].filter(history => history.issues.length).length;
       if (incomplete) view.append(el("p", "profile-note movement-warning", `Years active is unavailable for ${incomplete} players with incomplete movement records. Open a player profile for details.`));
     }
-    if (["honours", "team"].includes(route)) {
-      const legend = el("div", "competition-legend");
-      for (const [label, group] of [["European competitions", "continental"], ["League titles", "league"], ["Domestic cups", "cup"], ["One-off cups", "one-off"]]) {
-        legend.append(el("span", `competition-legend-item competition-${group}`, label));
-      }
-      view.append(legend);
+    if (route === "career") {
+      renderPlayerStats(table);
+      return;
     }
+    if (route === "honours") {
+      const groups = ["league", "continental", "cup", "one-off"];
+      table = { ...table, columns: [...table.columns.filter(column => !competitionGroup(column.label)),
+        ...groups.flatMap(group => table.columns.filter(column => competitionGroup(column.label) === group))] };
+    }
+    if (route === "team") table = { ...table, columns: table.columns.filter(column => [
+      "Season", "Division", "League", "UCL", "UEL", "UECL", "FA Cup", "L. Cup", "League Cup", "L. Trophy", "League Trophy",
+      "Super Cup", "C. Shield", "Community Shield", "P", "W", "D", "L", "F", "A", "GD", "W%", "Squad Value", "Transfer Profit",
+    ].includes(column.label)) };
     renderTable(table, {
       caption: config[1],
       defaultSort: route === "players" ? "Cl #" : route === "career" ? "Total" : route === "honours" ? "Titles" : null,

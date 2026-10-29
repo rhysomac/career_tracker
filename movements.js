@@ -27,26 +27,15 @@ export function buildMovementHistories(workbook, seasons) {
   const currentDate = spreadsheetDate(cell(clock.rows[0], clock, "Current date").value);
   if (currentDate === null) throw new Error("Settings must contain a valid current in-game date in A5.");
   const histories = new Map();
-  const names = new Map();
   for (const row of workbook.Players.rows) {
     const id = playerId(row, workbook.Players);
     if (!id) continue;
     histories.set(id, { events: [], totalYears: null, issues: [], currentDate: dateText(currentDate) });
-    for (const label of ["Preferred Name", "Full Name", "Name"]) {
-      const name = cell(row, workbook.Players, label).value;
-      if (!isMissing(name)) {
-        const ids = names.get(name) || new Set();
-        ids.add(id);
-        names.set(name, ids);
-      }
-    }
   }
   const text = entry => isMissing(entry.value) ? "-" : entry.text;
   for (const table of [workbook.Players, workbook.Start, ...seasons.map(season => workbook[season])]) {
     for (const row of table.rows) {
-      const name = cell(row, table, "Name").value;
-      const matches = names.get(name);
-      const id = playerId(row, table) || (matches?.size === 1 ? [...matches][0] : null);
+      const id = playerId(row, table);
       if (!id) continue;
       if (!histories.has(id)) histories.set(id, { events: [], totalYears: null, issues: [], currentDate: dateText(currentDate) });
       const history = histories.get(id);

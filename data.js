@@ -12,26 +12,35 @@ export const TIMELINES = {
   MR_Timeline: "Match rating",
   Pos1_Timeline: "Position",
   Val_Timeline: "Market value",
-  Wage_Timeline: "Wage",
 };
 
 export const HELP = {
   "Cl #": "Club number", "Pl #": "Player number", Nat: "Nationality",
-  AN: "Age at season end", Age: "Age at season end", Pos1: "Primary position", Ovr: "Overall rating",
+  AN: "Age", Age: "Age", "Age Now": "Age", Pos: "Position 1", Pos1: "Position 1", Pos2: "Position 2", Pos3: "Position 3", Pos4: "Position 4", Ovr: "Overall rating",
   Pot: "Potential", Gr: "Overall growth", SM: "Skill moves", WF: "Weak foot",
   AP: "Appearances", GL: "Goals", AS: "Assists", CS: "Clean sheets",
   MR: "Match rating", "GL/G": "Goals per game", "AS/G": "Assists per game",
   "CS%": "Clean sheet percentage", "Height (cm)": "Height (cm)", "Weight (kg)": "Weight (kg)",
   Val: "Market value", CV: "Change in value",
-  CW: "Change in wage", "Cnt YR": "Contract years", "Inj Wks": "Injury weeks",
+  CW: "Change in wage", "Cnt YR": "Contract years", "Inj Wks": "Weeks injured",
   TAP: "Total appearances", TGL: "Total goals", TAS: "Total assists",
   TCS: "Total clean sheets", TMR: "Total match rating",
   FAP: "Friendly appearances", FGL: "Friendly goals", FAS: "Friendly assists",
   FCS: "Friendly clean sheets", FMR: "Friendly match rating",
-  "Yrs Active": "Years active",
+  "Yrs Active": "Years Active",
 };
 
 export const POSITION_ORDER = ["GK", "RB", "CB", "LB", "CDM", "RM", "CM", "LM", "CAM", "RW", "ST", "LW"];
+
+export function titleCase(value) {
+  const minor = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "per", "the", "to", "with"]);
+  return String(value).split(" ").map((word, index) =>
+    index > 0 && minor.has(word.toLowerCase()) ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+export function awardTitle(label) {
+  return ({ PotS: "Player of the Season", YPotS: "Young Player of the Season", "Most CS": "Most Clean Sheets" })[label] || titleCase(label);
+}
 
 export function formatSeason(value) {
   const match = /^(\d{2})\/(\d{2})$/.exec(String(value));
@@ -54,6 +63,7 @@ export function parseResponse(text) {
 
 export function normalizeTable(table, sheet) {
   if (sheet === "Titles_Timeline") return normalizeTitlesTimeline(table);
+  if (sheet === "Season_Awards") return normalizeSeasonAwards(table);
   const columns = table.cols.flatMap((column, index) => {
     const sourceLabel = column.label.trim();
     if (["Age Frac", "Age Frac Dep"].includes(sourceLabel) || /^Sq\s*#$/i.test(sourceLabel)) return [];
@@ -66,7 +76,79 @@ export function normalizeTable(table, sheet) {
     const cell = row.c[column.index];
     return [column.key, { value: cell?.v ?? null, text: cell?.f ?? String(cell?.v ?? "") }];
   }))).filter(row => columns.some(column => !isMissing(row[column.key].value)));
-  return { sheet, columns, rows };
+  const result = { sheet, columns, rows };
+  if (sheet === "Players_Stats") result.leaderboards = statsLeaderboards(table);
+  return result;
+}
+
+export const LEADERBOARD_METRICS = ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%"];
+
+function statsLeaderboards(table) {
+  const blocks = table.rows.filter(row => row.c.filter(entry => entry?.v === "Name").length >= 4);
+  return Object.fromEntries(LEADERBOARD_METRICS.map((metric, index) => {
+    const header = blocks[Math.floor(index / 4)];
+    if (!header) return [metric, null];
+    const nameIndex = header.c.flatMap((entry, offset) => entry?.v === "Name" ? [offset] : [])[index % 4];
+    const start = table.rows.indexOf(header) + 1;
+    const rows = [];
+    for (const row of table.rows.slice(start)) {
+      const rank = row.c[nameIndex - 1];
+      if (typeof rank?.v !== "number") break;
+      const entry = offset => ({ value: row.c[offset]?.v ?? null, text: row.c[offset]?.f ?? String(row.c[offset]?.v ?? "") });
+      rows.push({ rank: entry(nameIndex - 1), name: entry(nameIndex), position: entry(nameIndex + 1), stat: entry(nameIndex + 2) });
+    }
+    return [metric, {
+      sheet: "Players_Stats",
+      isLeaderboard: true,
+      columns: [{ key: "rank", label: "#", type: "number" }, { key: "name", label: "Name", type: "string" },
+        { key: "position", label: "Pos", type: "string" }, { key: "stat", label: metric, type: "number" }],
+      rows,
+    }];
+  }));
+}
+
+export function normalizeSeasonAwards(table) {
+  const positions = ["GK", "RB", "RCB", "LCB", "LB", "RDM", "LDM", "RM", "LM", "CAM", "ST"];
+  const heading = table.rows.findIndex(row => row.c.some(entry => entry?.v === "GK") && row.c.some(entry => entry?.v === "ST"));
+  const other = table.rows.findIndex(row => row.c[0]?.v === "Other");
+  if (heading < 0 || other < 0) throw new Error("Season_Awards must contain ToTS position headings and an Other block.");
+  const parseBlock = (headerIndex, end, labels, numericSelections = false) => {
+    const header = table.rows[headerIndex];
+    const seen = new Set();
+    const columns = [{ key: "season", label: "Season", type: "string" },
+      ...labels.map((label, index) => ({ key: `selection${index}`, label, type: "string" }))];
+    const rows = table.rows.slice(headerIndex + 1, end).filter(row => {
+      const season = row.c[0]?.v;
+      if (!/^\d{2}\/\d{2}$/.test(String(season)) || seen.has(season)) return false;
+      seen.add(season);
+      return true;
+    }).map(row => {
+      const idStart = row.c.findIndex((entry, index) => index > labels.length && entry?.v === row.c[0].v);
+      return Object.fromEntries(columns.map((column, index) => {
+        if (!index) return [column.key, timelineCell(row.c[0].v)];
+        const source = header.c.findIndex(entry => entry?.v === column.label);
+        const id = idStart >= 0 ? row.c[idStart + index]?.v : null;
+        const text = numericSelections && idStart >= 0 && typeof id !== "number" ? null : source >= 0 ? row.c[source]?.v : null;
+        const name = isMissing(text) && typeof id === "number" ? `Player ${id}` : text;
+        return [column.key, { ...timelineCell(name), players: isMissing(name) ? [] : [{ id: typeof id === "number" ? String(id) : null, text: String(name) }] }];
+      }));
+    });
+    return { sheet: "Season_Awards", columns, rows };
+  };
+  const lineup = parseBlock(heading, other, positions, true);
+  const awardsHeader = other + 1;
+  const labels = table.rows[awardsHeader]?.c.slice(1).map(entry => entry?.v).filter(value => typeof value === "string" && value.trim());
+  if (!labels?.length) throw new Error("Season_Awards Other block has no award headings.");
+  const awards = parseBlock(awardsHeader, table.rows.length, labels);
+  // Keep the numeric selections authoritative while retaining names for unlinked records.
+  lineup.columns.slice(1).forEach(column => {
+    for (const row of lineup.rows) {
+      const selection = row[column.key].players[0];
+      row[column.key].value = selection?.id ? Number(selection.id) : row[column.key].value;
+    }
+  });
+  lineup.columns.slice(1).forEach(column => { column.type = "number"; });
+  return { ...lineup, awards };
 }
 
 export function normalizeTitlesTimeline(table) {
@@ -128,7 +210,10 @@ export function playerId(row, table) {
 }
 
 export function academyPlayer(row, table) {
-  return isMissing(cell(row, table, "Cl #").value);
+  if (isMissing(cell(row, table, "Cl #").value)) return true;
+  const youth = cell(row, table, "Yt#").value ?? cell(row, table, "Yt #").value;
+  return table.columns.some(column => column.label === "Pl #") && !isMissing(youth) &&
+    ["Pl #", "Join Date", "Dep Date"].every(label => isMissing(cell(row, table, label).value));
 }
 
 export const FORMATION = [
@@ -150,12 +235,13 @@ export function seasonLineups(table, squadBySeason = {}) {
     players: FORMATION.map(([position, x, y]) => {
       const idColumn = table.columns.find(column => column.label === position && column.type === "number");
       const selection = idColumn ? row[idColumn.key]?.value : cell(row, table, position).value;
-      const id = idColumn && !isMissing(selection) ? String(selection) : null;
+      const id = idColumn && typeof selection === "number" ? String(selection) : null;
+      const nameSelection = idColumn && table.sheet === "Season_Awards" ? row[idColumn.key]?.text : selection;
       const roster = squadBySeason[cell(row, table, "Season").value];
-      const player = roster?.rows.find(entry => idColumn ? playerId(entry, roster) === id : cell(entry, roster, "Name").value === selection);
+      const player = id ? roster?.rows.find(entry => playerId(entry, roster) === id) : null;
       const profile = id && squadBySeason.Players?.rows.find(entry => playerId(entry, squadBySeason.Players) === id);
       const name = profile ? cell(profile, squadBySeason.Players, "Preferred Name").value :
-        player ? cell(player, roster, "Name").value : idColumn ? (id ? `Player ${id}` : null) : selection;
+        player ? cell(player, roster, "Name").value : id ? `Player ${id}` : isMissing(nameSelection) ? null : nameSelection;
       return { position, x, y, id: id || (player ? playerId(player, roster) : null), name, number: player ? cell(player, roster, "Pl #").text : "" };
     }),
   }));
@@ -167,14 +253,24 @@ function timelineCell(value) {
     : { value, text: String(value) };
 }
 
-export function createSeasonStatTimeline(workbook, seasons, sourceLabel, sheet, totalLabel = sourceLabel) {
-  const columns = [
+export function createSeasonStatTimeline(workbook, seasons, sourceLabel, sheet) {
+  const template = workbook[({ "GL/G": "GL_Timeline", "AS/G": "AS_Timeline", "CS%": "CS_Timeline" })[sourceLabel]];
+  const columns = template ? template.columns.map(column => ({
+    key: ({ "Cl #": "id", Name: "name", Total: "Max" })[column.label] || column.label,
+    label: column.label === "Total" ? "Max" : column.label,
+    type: column.type,
+  })) : [
     { key: "id", label: "Cl #", type: "number" },
     { key: "name", label: "Name", type: "string" },
     { key: "Start", label: "Start", type: "number" },
     ...seasons.map(season => ({ key: season, label: season, type: "number" })),
-    { key: "Total", label: "Total", type: "number" },
+    { key: "Max", label: "Max", type: "number" },
   ];
+  const timelineSeasons = columns.filter(column => /^\d{2}\/\d{2}$/.test(column.label)).map(column => column.label);
+  const templateRows = new Map((template?.rows || []).flatMap(row => {
+    const id = playerId(row, template);
+    return id ? [[id, row]] : [];
+  }));
   const players = new Map();
   for (const season of ["Start", ...seasons]) {
     const table = workbook[season];
@@ -183,42 +279,34 @@ export function createSeasonStatTimeline(workbook, seasons, sourceLabel, sheet, 
       const id = playerId(row, table);
       const name = cell(row, table, "Preferred Name").value || cell(row, table, "Name").value;
       if (!name) continue;
-      const key = id || String(name);
+      const key = id || row;
       if (!players.has(key)) players.set(key, { id, name, values: {} });
-      const value = cell(row, table, sourceLabel).value;
-      if (!isMissing(value)) players.get(key).values[season] = value;
+      const entry = cell(row, table, sourceLabel);
+      if (!isMissing(entry.value)) players.get(key).values[season] = entry;
     }
   }
-  const career = workbook.Players_Stats;
-  for (const row of career?.rows || []) {
-    const id = playerId(row, career);
-    const name = cell(row, career, "Preferred Name").value || cell(row, career, "Name").value;
-    const player = players.get(id || String(name));
-    if (player && !isMissing(cell(row, career, totalLabel).value)) {
-      player.values.Total = cell(row, career, totalLabel).value;
+  for (const player of players.values()) {
+    for (const season of timelineSeasons) {
+      const entry = player.values[season];
+      if (typeof entry?.value === "number" && Number.isFinite(entry.value) &&
+          (!player.values.Max || entry.value > player.values.Max.value)) {
+        player.values.Max = entry;
+      }
     }
   }
   return {
     sheet,
     columns,
-    rows: [...players.values()].map(player => ({
-      id: timelineCell(player.id === null ? null : Number(player.id)),
-      name: timelineCell(player.name),
-      Start: timelineCell(player.values.Start),
-      ...Object.fromEntries(seasons.map(season => [season, timelineCell(player.values[season])])),
-      Total: timelineCell(player.values.Total),
-    })),
+    rows: [...players.values()].map(player => Object.fromEntries(columns.map(column => {
+      if (column.label === "Cl #") return [column.key, timelineCell(player.id === null ? null : Number(player.id))];
+      if (column.label === "Name") return [column.key, timelineCell(player.name)];
+      if (["Start", "Max", ...timelineSeasons].includes(column.label)) {
+        return [column.key, player.values[column.label] || timelineCell(null)];
+      }
+      const source = templateRows.get(player.id);
+      return [column.key, source ? cell(source, template, column.label) : timelineCell(null)];
+    }))),
   };
-}
-
-export function createWageTimeline(workbook, seasons) {
-  const timeline = createSeasonStatTimeline(workbook, seasons, "Wage", "Wage_Timeline");
-  for (const row of timeline.rows) {
-    if (!isMissing(row.Total.value)) continue;
-    const latestWage = [...seasons].reverse().map(season => row[season]).find(value => !isMissing(value.value));
-    if (latestWage) row.Total = latestWage;
-  }
-  return timeline;
 }
 
 export function sortRows(rows, key, direction = "asc", label = "") {
@@ -254,6 +342,7 @@ export function sortRows(rows, key, direction = "asc", label = "") {
 export async function fetchSheet(name) {
   const url = new URL(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq`);
   url.search = new URLSearchParams({ tqx: "out:json", headers: "1", sheet: name, cache: Date.now().toString() });
+  if (name === "Season_Awards") url.searchParams.set("headers", "0");
   if (name === "Settings") {
     url.searchParams.set("range", "A4:A5");
     url.searchParams.set("headers", "0");
@@ -277,8 +366,8 @@ export function sortSquadRows(rows, table, statusForRow) {
 }
 
 export async function loadWorkbook(onProgress) {
-  const derivedTimelines = new Set(["GL_G_Timeline", "AS_G_Timeline", "CS_Pct_Timeline", "Wage_Timeline"]);
-  const names = ["Settings", "Players", "Start", "Youth", "Players_Stats", "Player_Titles", "Titles_Timeline", "TotS", "Team_Stats",
+  const derivedTimelines = new Set(["GL_G_Timeline", "AS_G_Timeline", "CS_Pct_Timeline"]);
+  const names = ["Settings", "Players", "Start", "Youth", "Players_Stats", "Player_Titles", "Titles_Timeline", "Season_Awards", "Team_Stats",
     ...Object.keys(TIMELINES).filter(name => !derivedTimelines.has(name))];
   const workbook = {};
   // Keep requests bounded to avoid overwhelming Google's public endpoint.
@@ -295,6 +384,7 @@ export async function loadWorkbook(onProgress) {
     if (failure) throw failure.reason;
   }
   const ratings = workbook.Ratings_Timeline;
+  workbook.TotS = workbook.Season_Awards;
   const seasons = ratings.columns.filter(column => /^\d{2}\/\d{2}$/.test(column.label) &&
     ratings.rows.some(row => !isMissing(row[column.key].value))).map(column => column.label);
   if (!seasons.length) throw new Error("No populated seasons were found in Ratings_Timeline.");
@@ -302,6 +392,5 @@ export async function loadWorkbook(onProgress) {
   workbook.GL_G_Timeline = createSeasonStatTimeline(workbook, seasons, "GL/G", "GL_G_Timeline");
   workbook.AS_G_Timeline = createSeasonStatTimeline(workbook, seasons, "AS/G", "AS_G_Timeline");
   workbook.CS_Pct_Timeline = createSeasonStatTimeline(workbook, seasons, "CS%", "CS_Pct_Timeline");
-  workbook.Wage_Timeline = createWageTimeline(workbook, seasons);
   return { workbook, seasons };
 }
