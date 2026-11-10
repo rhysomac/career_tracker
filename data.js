@@ -216,6 +216,65 @@ export function academyPlayer(row, table) {
     ["Pl #", "Join Date", "Dep Date"].every(label => isMissing(cell(row, table, label).value));
 }
 
+export function youthId(row, table) {
+  const value = cell(row, table, "Yt #").value ?? cell(row, table, "Yt#").value;
+  const match = /^(?:Y)?0*(\d+)$/i.exec(String(value ?? "").trim());
+  return match ? `Y${Number(match[1])}` : null;
+}
+
+export function linkedYouthTable(youth, players) {
+  const ids = new Map();
+  for (const row of players.rows) {
+    const youthNumber = youthId(row, players);
+    const id = playerId(row, players);
+    if (!youthNumber || !id) continue;
+    if (ids.has(youthNumber) && ids.get(youthNumber) !== id) ids.set(youthNumber, null);
+    else if (!ids.has(youthNumber)) ids.set(youthNumber, id);
+  }
+  const key = "__graduateClubId";
+  return {
+    ...youth,
+    columns: [{ key, label: "Cl #", type: "number" }, ...youth.columns.filter(column => column.label !== "Cl #")],
+    rows: youth.rows.map(row => {
+      const id = ids.get(youthId(row, youth));
+      return { ...row, [key]: { value: id ? Number(id) : null, text: id || "" } };
+    }),
+  };
+}
+
+export function profileChartScale(metric, values) {
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const integer = ["AP", "GL", "AS", "CS", "Ovr", "Pot"].includes(metric);
+  let minimum = 0;
+  let maximum;
+  if (["MR", "Ovr", "Pot"].includes(metric)) {
+    const baseline = metric === "MR" ? 5 : 50;
+    const step = metric === "MR" ? 0.5 : 5;
+    minimum = low < baseline ? (Math.ceil(low / step) - 1) * step : baseline;
+    maximum = metric === "MR" ? 10 : 100;
+  } else {
+    const target = Math.max(1, high * 1.1);
+    const magnitude = 10 ** Math.floor(Math.log10(target));
+    maximum = [1, 2, 2.5, 5, 10].map(factor => factor * magnitude).find(value => value >= target);
+    if (integer) maximum = Math.ceil(maximum);
+  }
+  const ticks = [...new Set(Array.from({ length: 5 }, (_, step) => {
+    const value = minimum + (maximum - minimum) * step / 4;
+    return integer ? Math.round(value) : value;
+  }))];
+  return { minimum, maximum, ticks, integer };
+}
+
+export function statisticHighs(table, labels) {
+  return new Map(labels.map(label => {
+    const values = table.rows.filter(row => playerId(row, table) && !academyPlayer(row, table))
+      .map(row => cell(row, table, label).value)
+      .filter(value => typeof value === "number" && Number.isFinite(value));
+    return [label, values.length ? Math.max(...values) : null];
+  }));
+}
+
 export const FORMATION = [
   ["ST", 50, 12], ["LM", 15, 32], ["CAM", 50, 32], ["RM", 85, 32],
   ["LDM", 33, 53], ["RDM", 67, 53],

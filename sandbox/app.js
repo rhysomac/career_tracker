@@ -93,8 +93,11 @@ function render() {
     if (player) {
       card.dataset.player = player.id;
       const name = element("span", "pitch-name", player.name);
+      name.title = player.name;
       const detail = element("span", "slot-meta", `${nationFlag(player.nation)}${player.age === null ? "" : ` · ${player.age}`}`);
-      card.append(name, detail, element("span", "slot-positions", player.positions.join(" / ")));
+      const positions = element("span", "slot-positions", player.positions.join(" / "));
+      positions.title = player.positions.join(" / ");
+      card.append(name, detail, positions);
       const profile = element("div", "slot-profile");
       profile.append(playerImage(player, "slot-photo"));
       const rating = element("span", "slot-rating-group");

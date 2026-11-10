@@ -5,10 +5,11 @@
 <h1>Data tests</h1>
 <pre id="results">Running…</pre>
 <script type="module">
-import { parseResponse, normalizeTable, sortRows, sortSquadRows, cell, playerId, FORMATION, POSITION_ORDER, TIMELINES, HELP, seasonLineups, seasonTitles, titleSeasons, formatSeason, createSeasonStatTimeline, academyPlayer, titleCase, awardTitle } from "./data.js";
+import { parseResponse, normalizeTable, sortRows, sortSquadRows, cell, playerId, FORMATION, POSITION_ORDER, TIMELINES, HELP, seasonLineups, seasonTitles, titleSeasons, formatSeason, createSeasonStatTimeline, academyPlayer, titleCase, awardTitle, linkedYouthTable, profileChartScale, statisticHighs } from "./data.js";
 import { competitionGroup, createCellFormatter } from "./formatting.js";
 import { clubPlayersForSandbox } from "./sandbox-roster.js";
-import { spreadsheetDate, buildMovementHistories, applyActiveYears } from "./movements.js";
+import { spreadsheetDate, buildMovementHistories, applyActiveYears, applySeasonEndAges } from "./movements.js";
+import { FORMATION as BUILDER_FORMATION } from "./sandbox/model.js";
 const results = [];
 function test(name, check) {
   try { if (!check()) throw new Error("Assertion failed"); results.push(`PASS ${name}`); }
@@ -48,6 +49,52 @@ function fixture(sheet, labels, rows) {
     rows: rows.map(row => ({ c: row.map(value => ({ v: value })) })),
   }, sheet);
 }
+test("Youth numbers join graduates to club IDs despite different names or numeric formatting", () => {
+  const youth = fixture("Youth", ["Yt #", "Name"], [["Y001", "Old Name"], ["Y002", "Same Name"], ["Y003", "Unknown"], ["Y004", "Ambiguous"]]);
+  const players = fixture("Players", ["Cl #", "Yt #", "Preferred Name"],
+    [[41, "Y001", "New Name"], [42, 2, "Same Name"], [43, "Y004", "One"], [44, "Y004", "Two"], [45, "Y004", "Three"]]);
+  const linked = linkedYouthTable(youth, players);
+  return linked.rows.map(row => playerId(row, linked)).join("|") === "41|42||" &&
+    youth.columns.length === 2;
+});
+test("DOB sets June 30 season-end ages, including birthday boundaries and stale sheet values", () => {
+  const workbook = {
+    Players: fixture("Players", ["Cl #", "DOB"], [[1, "30/06/2000"], [2, "01/07/2000"], [3, "Date(2000,1,29)"]]),
+    "26/27": fixture("26/27", ["Cl #", "AN", "DOB"], [[1, 999], [2, 999], [3, 999], [null, 999, "01/08/2010"], [4, 18]]),
+    "25/26": fixture("25/26", ["Cl #"], [[1]]),
+  };
+  applySeasonEndAges(workbook, ["25/26", "26/27"]);
+  return workbook["26/27"].rows.map(row => cell(row, workbook["26/27"], "AN").value).join() === "27,26,27,16,18" &&
+    cell(workbook["25/26"].rows[0], workbook["25/26"], "AN").value === 26;
+});
+test("Count axes start at zero and use only integer ticks even with small counts", () =>
+  ["AP", "GL", "AS", "CS"].every(metric => [0, 1, 3, 57].every(high => {
+    const axis = profileChartScale(metric, [0, high]);
+    return axis.minimum === 0 && axis.maximum > high && axis.ticks.every(Number.isInteger);
+  })));
+test("Rating axes use fixed ceilings and lower baselines only when required", () =>
+  ["Ovr", "Pot"].every(metric => {
+    const normal = profileChartScale(metric, [70, 95]);
+    return normal.minimum === 50 && normal.maximum === 100 &&
+      profileChartScale(metric, [48]).minimum === 45 &&
+      profileChartScale(metric, [45]).minimum === 40;
+  }));
+test("Match rating axis uses tenths and half-point steps below five", () =>
+  profileChartScale("MR", [6, 8]).minimum === 5 && profileChartScale("MR", [6, 8]).maximum === 10 &&
+  profileChartScale("MR", [4]).minimum === 3.5 && profileChartScale("MR", [4.8]).minimum === 4.5);
+test("Money axes have rounded headroom at wage and nine-figure value levels", () =>
+  ["Val", "Wage"].every(metric => [0, 600, 65000, 2100000, 100000000].every(high => {
+    const axis = profileChartScale(metric, [high]);
+    const magnitude = 10 ** Math.floor(Math.log10(axis.maximum));
+    return axis.minimum === 0 && axis.maximum > high && axis.maximum <= Math.max(2, high * 2.5) &&
+      [1, 2, 2.5, 5, 10].some(factor => Math.abs(axis.maximum / magnitude - factor) < 0.00001);
+  })));
+test("Record highs exclude aggregate and unlinked academy rows but retain zero and ties", () => {
+  const table = fixture("26/27", ["Cl #", "Name", "GL", "AS"],
+    [[1, "One", 8, 0], [2, "Two", 8, null], [null, "SALFORD CITY", 100, 100], [null, "Youth", 50, 50]]);
+  const highs = statisticHighs(table, ["GL", "AS", "CS"]);
+  return highs.get("GL") === 8 && highs.get("AS") === 0 && highs.get("CS") === null;
+});
 test("Movement dates accept Google dates and day-first text but reject impossible dates", () =>
   spreadsheetDate("Date(2025,0,1)") === spreadsheetDate("01/01/2025") &&
   spreadsheetDate("2025-01-01") === spreadsheetDate("01/01/2025") &&
@@ -342,6 +389,34 @@ test("Sandbox rejects duplicate club identities", () => {
   try { toSandbox({ ...sandboxSquad, rows: [sandboxSquad.rows[0], sandboxSquad.rows[0]] }); return false; }
   catch (error) { return error.message.includes("duplicate"); }
 });
+const layoutFrame = document.createElement("iframe");
+layoutFrame.style.cssText = "height:1000px;border:0";
+const layoutLoaded = new Promise(resolve => { layoutFrame.onload = resolve; });
+layoutFrame.srcdoc = `<base href="${new URL("./sandbox/", location.href)}"><link rel="stylesheet" href="styles.css">
+  <main><div class="workspace"><section class="board panel">
+  <div class="panel-heading"><div><h3>4-2-3-1 <span>Wide</span></h3></div><label class="lineup-choice"><select><option>1st XI</option></select></label><button>Clear XI</button></div>
+  <div class="pitch">${BUILDER_FORMATION.map(slot => `<div class="slot filled" style="left:${slot.x}%;top:${slot.y}%">
+    <span class="slot-position">${slot.id}</span><span class="pitch-name">Babajide David Akintola</span>
+    <span class="slot-meta">Ghana · 30</span><span class="slot-positions">RB / RM / CAM / CDM</span>
+    <div class="slot-profile"><img class="slot-photo" src="../data/players/000.png" alt="">
+    <span class="slot-rating-group"><span class="rating slot-rating">99</span><span class="slot-rating-separator">/</span><span class="rating slot-rating">99</span></span></div>
+    <button class="slot-remove">x</button></div>`).join("")}</div></section><aside class="panel">Player Pool</aside></div></main>`;
+document.body.append(layoutFrame);
+await layoutLoaded;
+for (const width of [260, 320, 390, 480, 540, 768, 960, 1280]) {
+  layoutFrame.style.width = `${width}px`;
+  test(`Full-XI builder cards fit without overlap or overflow at ${width}px`, () => {
+    const doc = layoutFrame.contentDocument;
+    const pitch = doc.querySelector(".pitch").getBoundingClientRect();
+    const cards = [...doc.querySelectorAll(".slot")].map(node => node.getBoundingClientRect());
+    return doc.documentElement.scrollWidth <= width &&
+      cards.every((card, index) => card.left >= pitch.left - 1 && card.right <= pitch.right + 1 &&
+        card.top >= pitch.top - 1 && card.bottom <= pitch.bottom + 1 &&
+        cards.slice(index + 1).every(other => card.right <= other.left || other.right <= card.left ||
+          card.bottom <= other.top || other.bottom <= card.top));
+  });
+}
+layoutFrame.remove();
 document.querySelector("#results").textContent = results.join("\n");
 document.title = results.some(result => result.startsWith("FAIL")) ? "FAIL" : "PASS";
 </script>

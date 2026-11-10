@@ -1,8 +1,8 @@
-import { TIMELINES, HELP, LEADERBOARD_METRICS, loadWorkbook, cell, playerId, isMissing, sortRows, sortSquadRows, seasonLineups, seasonTitles, titleSeasons, formatSeason, academyPlayer, titleCase, awardTitle } from "./data.js";
+import { TIMELINES, HELP, LEADERBOARD_METRICS, loadWorkbook, cell, playerId, isMissing, sortRows, sortSquadRows, seasonLineups, seasonTitles, titleSeasons, formatSeason, academyPlayer, titleCase, awardTitle, youthId, linkedYouthTable, profileChartScale, statisticHighs } from "./data.js";
 import { nationCode, nationFlag, nationName } from "./sandbox/nations.js";
 import { competitionGroup, createCellFormatter } from "./formatting.js";
 import { clubPlayersForSandbox } from "./sandbox-roster.js";
-import { buildMovementHistories, applyActiveYears } from "./movements.js";
+import { buildMovementHistories, applyActiveYears, applySeasonEndAges } from "./movements.js";
 
 const view = document.querySelector("#view");
 const status = document.querySelector("#status");
@@ -22,6 +22,10 @@ let sandboxFrame;
 let sandboxRoster;
 let movementHistories;
 let leaderboardMetric = "AP";
+const recordMetrics = ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Ovr", "Pot", "Gr", "Val", "Wage", "CV", "CW"];
+let careerHighs;
+let seasonHighs;
+let singleSeasonHighs;
 
 window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.source !== sandboxFrame?.contentWindow || !sandboxRoster) return;
@@ -272,7 +276,7 @@ function renderTable(table, { columns = table.columns, linkedNames = true, searc
     button.title = titleCase(["Pl #", "Sq #"].includes(column.label) ? "Squad number" : HELP[column.label] || awardTitle(formatSeason(column.label)));
     button.addEventListener("click", () => {
       if (sortedKey === column.key) direction = direction === "asc" ? "desc" : "asc";
-      else direction = table.sheet === "Pos1_Timeline" || /^(Age|Age Now|AN)$/.test(column.label) || /^(Pos\d*|Join Pos)$/.test(column.label) ? "asc" :
+      else direction = table.sheet === "Pos1_Timeline" || /^(Cl #|Age|Age Now|AN)$/.test(column.label) || /^(Pos\d*|Join Pos)$/.test(column.label) ? "asc" :
         column.type === "number" ? "desc" : "asc";
       sortedKey = column.key;
       drawRows();
@@ -405,11 +409,10 @@ function profileBio(record, source, person, name, portrait, target) {
   if (!bio.has("Age Now")) addFields(source, record, ["Age"]);
 
   const players = workbook.Players;
-  const youthId = cell(person || record, person ? players : source, "Yt #").value ||
-    cell(person || record, person ? players : source, "Yt#").value;
-  if (!isMissing(youthId)) {
+  const youthNumber = youthId(person || record, person ? players : source);
+  if (youthNumber) {
     const youth = workbook.Youth;
-    const youthRecord = youth.rows.find(row => cell(row, youth, "Yt #").value === youthId);
+    const youthRecord = youth.rows.find(row => youthId(row, youth) === youthNumber);
     addFields(youth, youthRecord, ["Academy", "Birthplace"]);
   }
   const history = movementHistories.get(playerId(record, source));
@@ -487,6 +490,12 @@ function profileStats(record, table, target, career = false) {
       if (["SM", "WF"].includes(label)) detail.append(stars(value.value));
       else detail.textContent = value.text;
       item.append(el("dt", "", titleCase(labels[label] || HELP[label] || label)), detail);
+      if (recordMetrics.includes(label) && typeof value.value === "number" && Number.isFinite(value.value)) {
+        const badge = career ? value.value === careerHighs.get(label) ? "Career Record" : null :
+          value.value === singleSeasonHighs.get(label) ? "Single-Season Record" :
+            value.value === seasonHighs.get(table.sheet)?.get(label) ? "Season High" : null;
+        if (badge) item.append(el("span", "record-badge", badge));
+      }
       const column = table.columns.find(column => column.label === label);
       if (column && ["Ovr", "Pot", "Gr", "MR", "CV", "CW"].includes(label)) Object.assign(item.style, formatter(column, value.value));
       list.append(item);
@@ -640,18 +649,12 @@ function profileChart(seasonRecords, target) {
     };
     const svg = svgNode("svg", { viewBox: "0 0 640 260", role: "img", "aria-label": `${metrics[selectedProfileMetric]} by season` });
     svg.append(svgNode("title", {}, `${metrics[selectedProfileMetric]} by season`));
-    const maximum = Math.max(1, ...values.map(point => point.value));
-    const minimum = Math.min(0, ...values.map(point => point.value));
+    const { minimum, maximum, ticks, integer: wholeNumbers } = profileChartScale(selectedProfileMetric, values.map(point => point.value));
     const x = index => points.length === 1 ? 340 : 66 + index * 540 / (points.length - 1);
     const y = value => 206 - (value - minimum) * 176 / (maximum - minimum);
-    const wholeNumbers = ["Ovr", "Pot"].includes(selectedProfileMetric);
     const number = value => selectedProfileMetric === "MR" ? value.toFixed(1) :
       selectedProfileMetric === "CS%" ? `${Math.round(value * 100)}%` :
         new Intl.NumberFormat(undefined, { notation: wholeNumbers ? "standard" : "compact", maximumFractionDigits: wholeNumbers ? 0 : 2 }).format(value);
-    const ticks = [...new Set(Array.from({ length: 5 }, (_, step) => {
-      const value = minimum + (maximum - minimum) * step / 4;
-      return wholeNumbers ? Math.round(value) : value;
-    }))];
     for (const value of ticks) {
       svg.append(svgNode("line", { x1: 66, x2: 606, y1: y(value), y2: y(value), class: "chart-grid" }),
         svgNode("text", { x: 57, y: y(value) + 4, "text-anchor": "end", class: "chart-y-label" }, number(value)));
@@ -921,6 +924,7 @@ function render() {
       const incomplete = [...movementHistories.values()].filter(history => history.issues.length).length;
       if (incomplete) view.append(el("p", "profile-note movement-warning", `Years active is unavailable for ${incomplete} players with incomplete movement records. Open a player profile for details.`));
     }
+    if (route === "youth") table = linkedYouthTable(table, workbook.Players);
     if (route === "career") {
       renderPlayerStats(table);
       return;
@@ -936,8 +940,8 @@ function render() {
     ].includes(column.label)) };
     renderTable(table, {
       caption: config[1],
-      defaultSort: route === "players" ? "Cl #" : route === "career" ? "Total" : route === "honours" ? "Titles" : null,
-      defaultDirection: route === "players" ? "asc" : "desc",
+      defaultSort: ["players", "youth"].includes(route) ? "Cl #" : route === "career" ? "Total" : route === "honours" ? "Titles" : null,
+      defaultDirection: ["players", "youth"].includes(route) ? "asc" : "desc",
     });
   }
 }
@@ -948,10 +952,17 @@ async function refreshData() {
   errorBox.hidden = true;
   try {
     const result = await loadWorkbook(message => { status.textContent = message; });
+    applySeasonEndAges(result.workbook, result.seasons);
     const histories = buildMovementHistories(result.workbook, result.seasons);
     applyActiveYears(result.workbook, histories);
     workbook = result.workbook;
     seasons = result.seasons;
+    careerHighs = statisticHighs(workbook.Players_Stats, recordMetrics);
+    seasonHighs = new Map(seasons.map(season => [season, statisticHighs(workbook[season], recordMetrics)]));
+    singleSeasonHighs = new Map(recordMetrics.map(label => {
+      const highs = [...seasonHighs.values()].map(high => high.get(label)).filter(value => value !== null);
+      return [label, highs.length ? Math.max(...highs) : null];
+    }));
     movementHistories = histories;
     playerNames = new Map();
     const ambiguousNames = new Set();

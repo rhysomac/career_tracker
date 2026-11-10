@@ -59,7 +59,8 @@ const addFields = (sheet, labels, values) => {
   fixture.cols.push(...labels.map((label, index) => ({ id: `c${offset + index}`, label, type: "string" })));
   fixture.rows.forEach((row, index) => row.c.push(...(values[index] || labels.map(() => null)).map(v => ({ v }))));
 };
-addFields("Players", ["DOB", "Yrs Active"], [["01/01/2000", 999]]);
+addFields("Players", ["DOB", "Yrs Active", "Yt #"], [["01/01/2000", 999, "Y009"], [null, null, "Y001"]]);
+fixtures.Youth = table(["Yt #", "Name"], [["Y001", "Old Champion Name"], ["Y009", "Old Test Name"], ["Y099", "Unlinked Youth"]]);
 const movementLabels = ["Join Date", "Join From", "Join Age", "Join Fee", "Join Type", "Dep Date", "Dep To", "Dep Age", "Dep Fee", "Dep Type"];
 fixtures.Start = table(["Cl #", "Name", ...movementLabels],
   [[1, "Test Player", "Date(2025,0,1)", "Test Club", 25, "€1,200,000", "Transfer"]]);
@@ -215,20 +216,23 @@ try {
     doc.querySelector(".bio-header + .details").textContent.includes("180 cm") &&
     doc.querySelector(".bio-header + .details").textContent.includes("75 kg"), "Wrong bio layout"));
   test("Career performance heading is Career Stats", () => assert(stat("Appearances").closest("section").querySelector("h3").textContent === "Career Stats", "Wrong career heading"));
+  test("Career highs carry a concise record badge", () => assert(
+    stat("Appearances").querySelector(".record-badge")?.textContent === "Career Record" &&
+    stat("Goals").querySelector(".record-badge")?.textContent === "Career Record", "Missing career records"));
   test("Chart plots true zero and nonzero values in Career", () => assert(doc.querySelectorAll(".chart-dot").length === 2 && doc.querySelectorAll(".chart-line").length === 1 && doc.querySelector(".chart-values").textContent.includes("2025-260"), "Chart values incorrect"));
   for (const metric of ["Ovr", "Pot"]) {
     choose(doc.querySelector(".profile-chart select"), metric);
     test(`${metric} chart uses integer ticks at the correct heights`, () => {
       const labels = [...doc.querySelectorAll(".chart-y-label")];
-      const maximum = metric === "Ovr" ? 71 : 95;
       assert(labels.length === 5 && labels.every(label => /^\d+$/.test(label.textContent) &&
-        Math.abs(Number(label.getAttribute("y")) - (210 - Number(label.textContent) * 176 / maximum)) < 0.001),
+        Math.abs(Number(label.getAttribute("y")) - (210 - (Number(label.textContent) - 50) * 176 / 50)) < 0.001) &&
+        labels[0].textContent === "50" && labels.at(-1).textContent === "100",
         "Rating ticks must be whole numbers and align with their actual values");
     });
   }
   choose(doc.querySelector(".profile-chart select"), "MR");
   test("Match rating y-axis always shows one decimal place", () => assert(
-    [...doc.querySelectorAll(".chart-y-label")].map(label => label.textContent).join() === "0.0,1.8,3.5,5.3,7.0",
+    [...doc.querySelectorAll(".chart-y-label")].map(label => label.textContent).join() === "3.5,5.1,6.8,8.4,10.0",
     "Match rating ticks need exactly one decimal place"));
   test("Timeline has a solid box around the plotting area", () => {
     const border = doc.querySelector(".chart-border");
@@ -238,6 +242,14 @@ try {
       style.fill === "none" && style.stroke === "rgb(51, 51, 51)" && style.strokeDasharray === "none",
       "Plot border missing or not solid");
   });
+  choose(doc.querySelector(".profile-chart select"), "AP");
+  for (const metric of ["AP", "GL", "AS", "CS"]) {
+    choose(doc.querySelector(".profile-chart select"), metric);
+    test(`${metric} chart starts at zero with whole-number labels`, () => {
+      const labels = [...doc.querySelectorAll(".chart-y-label")].map(label => label.textContent);
+      assert(labels[0] === "0" && labels.every(label => /^\d+$/.test(label)), "Fractional count ticks");
+    });
+  }
   choose(doc.querySelector(".profile-chart select"), "AP");
   test("Career chart dropdown updates metric and exact values", () => assert(doc.querySelector(".profile-chart svg").getAttribute("aria-label") === "Appearances by season" && doc.querySelector(".chart-values").textContent.includes("2026-2720"), "Chart did not update"));
   test("Movements include deduplicated joins, loan departures and completed loan returns", () => {
@@ -272,9 +284,13 @@ try {
   test("Season attributes use four columns, two rows and the exact field order", () => assert(
     [...doc.querySelectorAll(".profile-attributes dt")].map(term => term.textContent).join("|") ===
       "Positions|Age at Season End|Skill Moves|Weak Foot|Overall Rating|Potential|Growth" &&
-    stat("Age at Season End").querySelector("dd").textContent === "22" &&
+    stat("Age at Season End").querySelector("dd").textContent === "26" &&
     frame.contentWindow.getComputedStyle(doc.querySelector(".profile-attributes")).gridTemplateColumns.split(" ").length === 4,
     "Wrong attribute order, layout or age"));
+  test("Single-season records replace season highs and ties share the record", () => assert(
+    stat("Appearances").querySelector(".record-badge")?.textContent === "Season High" &&
+    stat("Assists").querySelector(".record-badge")?.textContent === "Single-Season Record" &&
+    !stat("Weeks injured").querySelector(".record-badge"), "Incorrect seasonal badges"));
   test("Season movements immediately follow Value without a sidebar-sized gap", () => {
     const movements = doc.querySelector(".profile-movements");
     const previous = movements.previousElementSibling;
@@ -300,6 +316,11 @@ try {
     frame.contentWindow.getComputedStyle(doc.querySelector(".season-titles")).listStyleType === "none" &&
     doc.querySelector(".honours-section").getBoundingClientRect().height <= 130, "Honours are too spacious or missing icons"));
   choose(period(), "26/27");
+  test("Current-season age is calculated from DOB, not the stale AN cell", () => assert(
+    stat("Age at Season End").querySelector("dd").textContent === "27", "Current season age is stale"));
+  test("Highest appearance season gets only the single-season record badge", () => assert(
+    stat("Appearances").querySelectorAll(".record-badge").length === 1 &&
+    stat("Appearances").querySelector(".record-badge").textContent === "Single-Season Record", "Redundant record labels"));
   test("Changing season replaces the movement history", () => assert(
     [...doc.querySelectorAll(".profile-movements tbody tr")].map(row => row.cells[1].textContent).join() === "01/08/2026",
     "Previous season movements remain"));
@@ -597,6 +618,26 @@ try {
     doc.querySelectorAll(".profile-movements tbody tr").length === 2 &&
     doc.querySelector(".profile-movements").previousElementSibling.classList.contains("profile-chart"),
     "Career history or order incorrect"));
+  frame.contentWindow.location.hash = "#youth";
+  await new Promise(resolve => setTimeout(resolve, 50));
+  test("YA graduates use youth numbers for club links and portraits, never name matching", () => {
+    const rows = [...doc.querySelectorAll("tbody tr")];
+    assert(rows[0].querySelector('a[href="#player/1"]')?.textContent === "Old Test Name" &&
+      rows[0].querySelector('img[src*="players/001"]') &&
+      rows[1].querySelector('a[href="#player/2"]')?.textContent === "Old Champion Name" &&
+      !rows[2].querySelector("a"), "Graduates were not joined by youth number");
+  });
+  test("Club number first sorts ascending when switching from another column", () => {
+    const club = doc.querySelector("th button");
+    const name = [...doc.querySelectorAll("th button")].find(button => button.title === "Name");
+    name.click();
+    club.click();
+    assert(club.closest("th").getAttribute("aria-sort") === "ascending" &&
+      doc.querySelector("tbody tr td").textContent === "1", "First club-number click sorts descending");
+    club.click();
+    assert(club.closest("th").getAttribute("aria-sort") === "descending" &&
+      doc.querySelector("tbody tr td").textContent === "2", "Second click does not reverse sorting");
+  });
 } catch (error) { results.push(`FAIL Profile checks: ${error.message}`); }
 document.querySelector("#results").textContent = results.join("\n");
 document.title = results.some(result => result.startsWith("FAIL")) ? "FAIL" : "PASS";
