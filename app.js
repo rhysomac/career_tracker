@@ -2,7 +2,7 @@ import { TIMELINES, HELP, LEADERBOARD_METRICS, loadWorkbook, cell, playerId, isM
 import { nationCode, nationFlag, nationName } from "./sandbox/nations.js";
 import { competitionGroup, createCellFormatter } from "./formatting.js";
 import { clubPlayersForSandbox } from "./sandbox-roster.js";
-import { buildMovementHistories, applyActiveYears, applySeasonEndAges } from "./movements.js";
+import { buildMovementHistories, applyActiveYears, applySeasonStartAges } from "./movements.js";
 
 const view = document.querySelector("#view");
 const status = document.querySelector("#status");
@@ -470,9 +470,9 @@ function profileStats(record, table, target, career = false) {
     return;
   }
   const formatter = createCellFormatter(table);
-  const labels = { MR: "Average Match Rating", "Inj Wks": "Weeks Injured", CV: "Change in Value", CW: "Change in Wage", AN: "Age at Season End", Gr: "Growth" };
+  const labels = { MR: "Average Match Rating", "Inj Wks": "Weeks Injured", CV: "Change in Value", CW: "Change in Wage", Gr: "Growth" };
   const groups = career ? [["Career Stats", ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%"]]] : [
-    ["Attributes", ["Positions", "AN", "SM", "WF", "Ovr", "Pot", "Gr"]],
+    ["Attributes", ["Positions", "Age at Season Start", "SM", "WF", "Ovr", "Pot", "Gr"]],
     [formatSeason(table.sheet), ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Inj Wks"]],
     ["Value", ["Val", "Wage", "CV", "CW"]],
   ];
@@ -952,7 +952,7 @@ async function refreshData() {
   errorBox.hidden = true;
   try {
     const result = await loadWorkbook(message => { status.textContent = message; });
-    applySeasonEndAges(result.workbook, result.seasons);
+    applySeasonStartAges(result.workbook, result.seasons);
     const histories = buildMovementHistories(result.workbook, result.seasons);
     applyActiveYears(result.workbook, histories);
     workbook = result.workbook;

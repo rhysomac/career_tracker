@@ -22,26 +22,29 @@ function dateText(value) {
   return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
 }
 
-export function applySeasonEndAges(workbook, seasons) {
+export function applySeasonStartAges(workbook, seasons) {
   for (const season of seasons) {
     const table = workbook[season];
-    let column = table.columns.find(entry => entry.label === "AN");
+    let column = table.columns.find(entry => entry.label === "Age at Season Start");
     if (!column) {
-      column = { key: "__seasonEndAge", label: "AN", type: "number" };
+      column = { key: "__seasonStartAge", label: "Age at Season Start", type: "number" };
       table.columns.push(column);
     }
-    const [start, end] = season.split("/").map(Number);
-    const year = 2000 + end + (end < start ? 100 : 0);
+    const year = 2000 + Number(season.split("/")[0]);
     for (const row of table.rows) {
       const id = playerId(row, table);
       const person = !academyPlayer(row, table) && id
         ? workbook.Players.rows.find(entry => playerId(entry, workbook.Players) === id) : null;
       const dob = cell(person, workbook.Players, "DOB").value ?? cell(row, table, "DOB").value;
-      if (isMissing(dob)) continue;
+      if (isMissing(dob)) {
+        row[column.key] = { value: null, text: "" };
+        continue;
+      }
       const timestamp = spreadsheetDate(dob);
-      if (timestamp === null) throw new Error(`Invalid DOB for season-end age in ${season}: ${dob}.`);
+      if (timestamp === null) throw new Error(`Invalid DOB for season-start age in ${season}: ${dob}.`);
       const birth = new Date(timestamp);
-      const age = year - birth.getUTCFullYear() - (birth.getUTCMonth() >= 6 ? 1 : 0);
+      const age = year - birth.getUTCFullYear() -
+        (birth.getUTCMonth() > 6 || (birth.getUTCMonth() === 6 && birth.getUTCDate() > 1) ? 1 : 0);
       row[column.key] = { value: age, text: String(age) };
     }
   }

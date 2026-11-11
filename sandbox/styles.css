@@ -36,7 +36,7 @@ h3 span { font-size: 14px; color: var(--muted); font-weight: 400; margin-left: 5
 .stats > div:last-child { border: 0; }
 .stats strong { display: block; font-size: 23px; font-weight: 500; }
 .stats span { display: block; color: var(--muted); font-size: 9px; letter-spacing: 1px; margin-top: 5px; }
-.pitch { margin: 0 20px; position: relative; aspect-ratio: 1 / 1.13; min-height: 680px; background: repeating-linear-gradient(to bottom, #294d3c 0%, #294d3c 10%, #2d5341 10%, #2d5341 20%); border: 1px solid #4c6d52; border-radius: 5px; isolation: isolate; }
+.pitch { margin: 0 20px; width: calc(100% - 40px); position: relative; aspect-ratio: 1 / 1.13; min-height: 680px; background: repeating-linear-gradient(to bottom, #294d3c 0%, #294d3c 10%, #2d5341 10%, #2d5341 20%); border: 1px solid #4c6d52; border-radius: 5px; isolation: isolate; }
 .pitch-lines { position: absolute; inset: 3.5% 5%; border: 1px solid #9bbca14d; pointer-events: none; }
 .halfway { position: absolute; top: 50%; width: 100%; border-top: 1px solid #9bbca14d; }
 .centre-circle { position: absolute; left: 50%; top: 50%; width: 28%; aspect-ratio: 1; border: 1px solid #9bbca14d; border-radius: 50%; transform: translate(-50%, -50%); }
@@ -164,7 +164,7 @@ textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 12
   .stats > div { padding-left: 10px; }
   .stats strong { font-size: 20px; }
   .panel-heading .primary { font-size: 11px; }
-  .pitch { margin: 0 8px; aspect-ratio: 1 / 1.65; min-height: 640px; }
+  .pitch { margin: 0 8px; width: calc(100% - 16px); aspect-ratio: 1 / 1.65; min-height: 640px; }
   .slot { min-height: 70px; width: 23%; padding: 4px 2px; gap: 1px; }
   .slot-profile { flex-direction: column; gap: 1px; }
   .slot-photo { width: 26px; height: 26px; }

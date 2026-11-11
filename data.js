@@ -243,16 +243,17 @@ export function linkedYouthTable(youth, players) {
 }
 
 export function profileChartScale(metric, values) {
+  if (metric === "MR") return { minimum: 0, maximum: 10, ticks: [0, 2, 4, 6, 8, 10], integer: false };
   const low = Math.min(...values);
   const high = Math.max(...values);
   const integer = ["AP", "GL", "AS", "CS", "Ovr", "Pot"].includes(metric);
   let minimum = 0;
   let maximum;
-  if (["MR", "Ovr", "Pot"].includes(metric)) {
-    const baseline = metric === "MR" ? 5 : 50;
-    const step = metric === "MR" ? 0.5 : 5;
+  if (["Ovr", "Pot"].includes(metric)) {
+    const baseline = 50;
+    const step = 5;
     minimum = low < baseline ? (Math.ceil(low / step) - 1) * step : baseline;
-    maximum = metric === "MR" ? 10 : 100;
+    maximum = 100;
   } else {
     const target = Math.max(1, high * 1.1);
     const magnitude = 10 ** Math.floor(Math.log10(target));

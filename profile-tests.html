@@ -231,9 +231,9 @@ try {
     });
   }
   choose(doc.querySelector(".profile-chart select"), "MR");
-  test("Match rating y-axis always shows one decimal place", () => assert(
-    [...doc.querySelectorAll(".chart-y-label")].map(label => label.textContent).join() === "3.5,5.1,6.8,8.4,10.0",
-    "Match rating ticks need exactly one decimal place"));
+  test("Match rating y-axis spans zero to ten in increments of two", () => assert(
+    [...doc.querySelectorAll(".chart-y-label")].map(label => label.textContent).join() === "0.0,2.0,4.0,6.0,8.0,10.0",
+    "Match rating ticks must increase by two"));
   test("Timeline has a solid box around the plotting area", () => {
     const border = doc.querySelector(".chart-border");
     const style = frame.contentWindow.getComputedStyle(border);
@@ -283,8 +283,8 @@ try {
     stat("Appearances").closest("section").querySelector("h3").textContent === "2025-26", "Wrong seasonal headings"));
   test("Season attributes use four columns, two rows and the exact field order", () => assert(
     [...doc.querySelectorAll(".profile-attributes dt")].map(term => term.textContent).join("|") ===
-      "Positions|Age at Season End|Skill Moves|Weak Foot|Overall Rating|Potential|Growth" &&
-    stat("Age at Season End").querySelector("dd").textContent === "26" &&
+      "Positions|Age at Season Start|Skill Moves|Weak Foot|Overall Rating|Potential|Growth" &&
+    stat("Age at Season Start").querySelector("dd").textContent === "25" &&
     frame.contentWindow.getComputedStyle(doc.querySelector(".profile-attributes")).gridTemplateColumns.split(" ").length === 4,
     "Wrong attribute order, layout or age"));
   test("Single-season records replace season highs and ties share the record", () => assert(
@@ -316,8 +316,8 @@ try {
     frame.contentWindow.getComputedStyle(doc.querySelector(".season-titles")).listStyleType === "none" &&
     doc.querySelector(".honours-section").getBoundingClientRect().height <= 130, "Honours are too spacious or missing icons"));
   choose(period(), "26/27");
-  test("Current-season age is calculated from DOB, not the stale AN cell", () => assert(
-    stat("Age at Season End").querySelector("dd").textContent === "27", "Current season age is stale"));
+  test("Current-season start age is calculated from DOB, not the stale AN cell", () => assert(
+    stat("Age at Season Start").querySelector("dd").textContent === "26", "Current season age is stale"));
   test("Highest appearance season gets only the single-season record badge", () => assert(
     stat("Appearances").querySelectorAll(".record-badge").length === 1 &&
     stat("Appearances").querySelector(".record-badge").textContent === "Single-Season Record", "Redundant record labels"));
