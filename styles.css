@@ -92,8 +92,9 @@ th.name-column { z-index: 3; }
 .career-table th button, .career-table td { padding-inline: 7px; }
 .season-awards-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 24px; align-items: start; }
 .season-awards-layout .formation-panel { width: 100%; max-width: none; }
-.season-awards-layout .pitch { min-height: 660px; }
+.season-awards-layout .pitch { width: 100%; min-height: 660px; }
 .season-awards-layout .formation-player { width: 20%; }
+.formation-position { display: none; }
 .season-awards-other .detail-section { margin: 0 0 14px; }
 .award-card > .award-players, .award-card > span { display: flex; padding: 14px; }
 .award-players { display: flex; flex-direction: column; gap: 8px; }
@@ -229,4 +230,13 @@ dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
   .season-awards-layout .pitch { min-height: 0; }
   .profile-stats.profile-attributes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .season-awards-other { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .season-awards-layout .pitch { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; padding: 14px; aspect-ratio: auto; min-height: 0; }
+  .season-awards-layout .pitch > :not(.formation-player) { display: none; }
+  .season-awards-layout .formation-player { position: static; transform: none; width: auto; min-width: 0; display: grid; grid-template-columns: 32px 36px minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 6px; background: white; text-align: left; }
+  .season-awards-layout .formation-position { display: block; font-size: 11px; font-weight: 700; }
+  .season-awards-layout .shirt { width: 34px; height: 31px; font-size: 12px; }
+  .season-awards-layout .formation-name { justify-content: flex-start; gap: 8px; padding: 0; font-size: 13px; box-shadow: none; }
+  .season-awards-layout .tots-player-photo { width: 34px; height: 34px; flex-basis: 34px; }
 }

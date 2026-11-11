@@ -22,7 +22,7 @@ let sandboxFrame;
 let sandboxRoster;
 let movementHistories;
 let leaderboardMetric = "AP";
-const recordMetrics = ["AP", "GL", "AS", "CS", "MR", "GL/G", "AS/G", "CS%", "Ovr", "Pot", "Gr", "Val", "Wage", "CV", "CW"];
+const recordMetrics = LEADERBOARD_METRICS;
 let careerHighs;
 let seasonHighs;
 let singleSeasonHighs;
@@ -791,7 +791,7 @@ function renderTeamOfSeason() {
     const id = player.id;
     card.append(id ? playerLink(id, name) : el("span", "", name));
     if (!isMissing(player.name)) card.prepend(playerPhoto(id, name, "tots-player-photo"));
-    slot.append(shirt, card);
+    slot.append(el("span", "formation-position", player.position), shirt, card);
     pitch.append(slot);
   }
   panel.append(pitch);

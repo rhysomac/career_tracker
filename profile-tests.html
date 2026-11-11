@@ -291,6 +291,14 @@ try {
     stat("Appearances").querySelector(".record-badge")?.textContent === "Season High" &&
     stat("Assists").querySelector(".record-badge")?.textContent === "Single-Season Record" &&
     !stat("Weeks injured").querySelector(".record-badge"), "Incorrect seasonal badges"));
+  test("Record markers appear only on performance stats, never attributes, finances or injuries", () => {
+    for (const label of ["Overall rating", "Potential", "Growth", "Market value", "Wage", "Change in value", "Change in wage", "Weeks injured"]) {
+      assert(!stat(label)?.querySelector(".record-badge"), `Unexpected record marker on ${label}`);
+    }
+    assert([...doc.querySelectorAll(".record-badge")].every(badge =>
+      ["Appearances", "Goals", "Assists", "Clean Sheets", "Average Match Rating", "Goals per Game", "Assists per Game", "Clean Sheet Percentage"]
+        .includes(badge.parentElement.querySelector("dt").textContent)), "Non-performance record marker");
+  });
   test("Season movements immediately follow Value without a sidebar-sized gap", () => {
     const movements = doc.querySelector(".profile-movements");
     const previous = movements.previousElementSibling;
@@ -433,15 +441,38 @@ try {
     [...doc.querySelectorAll(".award-card h3")].map(term => term.textContent).join("|") ===
       "Captain:|Player of the Season:|Young Player of the Season:|Top Scorer:|Top Assists:|Most Clean Sheets:",
     "Abbreviated award names remain"));
-  test("Desktop pitch uses available width and its player cards do not overlap", () => {
-    for (const width of [1920, 1366, 1024, 390]) {
+  test("Season Awards cards stay inside the visible panel without overlapping in either phone orientation", () => {
+    for (const width of [1920, 1366, 1024, 932, 844, 740, 650, 430, 390, 320]) {
       frame.style.width = `${width}px`;
+      const panel = doc.querySelector(".formation-panel").getBoundingClientRect();
       const cards = [...doc.querySelectorAll(".formation-player")].map(node => node.getBoundingClientRect());
-      assert(cards.every((card, index) => cards.slice(index + 1).every(other =>
+      assert(cards.every((card, index) => card.left >= panel.left && card.right <= panel.right &&
+        cards.slice(index + 1).every(other =>
         card.right <= other.left || other.right <= card.left || card.bottom <= other.top || other.bottom <= card.top)),
         `Pitch player cards overlap at ${width}px`);
     }
     frame.style.width = "1200px";
+  });
+  test("Phone Season Awards wrap full long names with visible positions and no clipping", () => {
+    const links = [...doc.querySelectorAll(".formation-name .player-link")];
+    const originalNames = links.map(link => link.textContent);
+    try {
+      for (const link of links) link.textContent = "Babajide Nathaniel David Akintola";
+      for (const width of [320, 390, 650, 844]) {
+        frame.style.width = `${width}px`;
+        for (const link of links) {
+          const rect = link.getBoundingClientRect();
+          const card = link.closest(".formation-player").getBoundingClientRect();
+          assert(link.scrollWidth <= link.clientWidth + 1 && link.scrollHeight <= link.clientHeight + 1 &&
+            rect.left >= card.left && rect.right <= card.right && rect.bottom <= card.bottom &&
+            frame.contentWindow.getComputedStyle(link.closest(".formation-player").querySelector(".formation-position")).display !== "none",
+            `Name clipped or position hidden at ${width}px`);
+        }
+      }
+    } finally {
+      links.forEach((link, index) => { link.textContent = originalNames[index]; });
+      frame.style.width = "1200px";
+    }
   });
   choose(doc.querySelector("#view select"), "Timeline");
   test("Season Awards Timeline joins eleven positions and six awards without duplicate seasons", () => assert(
